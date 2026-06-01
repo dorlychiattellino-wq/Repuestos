@@ -360,13 +360,24 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 const tcInput=document.getElementById('tcInput');
 function setTC(v){DB.tc=Number(v)||DB.tc;tcInput.value=DB.tc;DB.save()}
 tcInput.onchange=()=>{setTC(tcInput.value);renderCot();renderComp();renderCompra()};
+
+// trae el dólar oficial BNA venta probando varias fuentes (igual que la app de proveedores)
+async function traerTC(){
+  const fuentes=[
+    async()=>{const r=await fetch('https://dolarapi.com/v1/dolares/oficial');const d=await r.json();return parseFloat(d?.venta)||null;},
+    async()=>{const r=await fetch('https://api.bluelytics.com.ar/v2/latest');const d=await r.json();return parseFloat(d?.oficial?.value_sell)||null;},
+    async()=>{const r=await fetch('https://dolarapi.com/v1/cotizaciones/oficial');const d=await r.json();return parseFloat(d?.venta)||null;}
+  ];
+  for(const f of fuentes){
+    try{const tc=await f();if(tc){return tc;}}catch(e){}
+  }
+  return null;
+}
 document.getElementById('tcRefresh').onclick=async()=>{
   const btn=document.getElementById('tcRefresh');btn.textContent='…';
-  try{
-    const r=await fetch('https://dolarapi.com/v1/cotizaciones/oficial');
-    const j=await r.json();
-    if(j&&j.venta){setTC(j.venta);renderCot();renderComp();renderCompra();}
-  }catch(e){alert('No se pudo traer la cotización automática. Cargala a mano en el campo TC.');}
+  const tc=await traerTC();
+  if(tc){setTC(tc);renderCot();renderComp();renderCompra();}
+  else{alert('No se pudo traer la cotización automática en este momento. Cargala a mano en el campo TC.');}
   btn.textContent='↻';
 };
 
@@ -863,8 +874,8 @@ if(typeof DB.ordenRef!=='string')DB.ordenRef='';
 DB.cots.forEach(c=>{if(c.prov&&!DB.proveedores.some(x=>x.toLowerCase()===c.prov.toLowerCase()))DB.proveedores.push(c.prov)});
 DB.save();
 setTC(DB.tc);refreshFilters();renderPiezas();renderPedido();renderBadge();
-// intento traer TC al abrir
-document.getElementById('tcRefresh').click();
+// intento traer el TC automáticamente al abrir (en segundo plano)
+traerTC().then(tc=>{if(tc){setTC(tc);renderCot();renderComp();renderCompra();}});
 </script>
 </body>
 </html>
