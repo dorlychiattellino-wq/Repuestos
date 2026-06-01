@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgroRepuestos — Gestión de Repuestos y Cotizaciones</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
+
+  :root{
+    --bg:#0f1410;
+    --panel:#161d17;
+    --panel-2:#1d261e;
+    --line:#2c3a2d;
+    --green:#7cb342;
+    --green-bright:#a4e154;
+    --amber:#e6a417;
+    --red:#e0533d;
+    --text:#e8efe4;
+    --muted:#8fa088;
+    --best:#1f3a16;
+    --best-line:#a4e154;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Archivo',sans-serif;background:var(--bg);color:var(--text);
+    background-image:radial-gradient(circle at 15% 0%,rgba(124,179,66,.08),transparent 40%),radial-gradient(circle at 100% 100%,rgba(230,164,23,.05),transparent 40%);
+    min-height:100vh;-webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'Space Mono',monospace}
+  header{
+    border-bottom:1px solid var(--line);padding:14px 20px;display:flex;align-items:center;gap:14px;
+    position:sticky;top:0;background:rgba(15,20,16,.92);backdrop-filter:blur(10px);z-index:50;flex-wrap:wrap;
+  }
+  .logo{font-weight:900;font-size:20px;letter-spacing:-.5px;display:flex;align-items:center;gap:8px}
+  .logo span{color:var(--green-bright)}
+  .tc-box{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 12px}
+  .tc-box b{color:var(--amber)}
+  .tc-box input{width:78px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 6px;font-family:'Space Mono',monospace;font-size:13px}
+  nav{display:flex;gap:4px;padding:10px 20px;border-bottom:1px solid var(--line);overflow-x:auto}
+  nav button{
+    background:transparent;border:none;color:var(--muted);font-family:inherit;font-weight:600;font-size:14px;
+    padding:10px 16px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:.15s;
+  }
+  nav button:hover{color:var(--text)}
+  nav button.active{background:var(--green);color:#0f1410}
+  .badge{display:inline-flex;min-width:20px;height:20px;align-items:center;justify-content:center;background:var(--amber);color:#0f1410;border-radius:10px;font-size:11px;font-weight:700;padding:0 6px;margin-left:6px}
+  main{padding:20px;max-width:1300px;margin:0 auto}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  h2{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:18px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600}
+  input,select,textarea{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;
+    padding:9px 11px;font-family:inherit;font-size:14px;outline:none;transition:.15s;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--green)}
+  input::placeholder{color:#5d6b57}
+  .btn{
+    background:var(--green);color:#0f1410;border:none;border-radius:8px;padding:10px 16px;
+    font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;
+  }
+  .btn:hover{background:var(--green-bright)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .btn.ghost:hover{border-color:var(--green);color:var(--green-bright)}
+  .btn.amber{background:var(--amber)}
+  .btn.amber:hover{filter:brightness(1.1)}
+  .dropdown{position:relative;display:inline-block}
+  .dropdown-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;min-width:170px;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  .dropdown.open .dropdown-menu{display:block}
+  .dropdown-menu button{display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:14px;font-weight:600;padding:9px 12px;border-radius:7px;cursor:pointer}
+  .dropdown-menu button:hover{background:var(--panel-2);color:var(--green-bright)}
+  .btn.danger{background:transparent;border:1px solid var(--red);color:var(--red);padding:6px 10px;font-size:13px}
+  .btn.danger:hover{background:var(--red);color:#fff}
+  .btn.sm{padding:6px 11px;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;padding:10px;border-bottom:1px solid var(--line)}
+  td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tr:hover td{background:var(--panel)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+  .pill{display:inline-block;background:var(--panel-2);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--muted)}
+  .pill.cat{color:var(--green-bright);border-color:var(--green)}
+  .empty{text-align:center;padding:50px 20px;color:var(--muted)}
+  .empty svg{opacity:.4;margin-bottom:12px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:560px;animation:pop .2s ease}
+  @keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+  .modal h3{font-size:18px;font-weight:800;margin-bottom:16px}
+  .modal .field{margin-bottom:12px}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+  .qty{width:64px;text-align:center;font-family:'Space Mono',monospace}
+  .best-row td{background:var(--best)!important;border-color:var(--best-line)}
+  .tag-best{background:var(--green-bright);color:#0f1410;font-weight:700;font-size:11px;padding:2px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.5px}
+  .price{font-family:'Space Mono',monospace;font-weight:700}
+  .price.win{color:var(--green-bright)}
+  .stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px;flex:1;min-width:150px}
+  .stat .n{font-size:26px;font-weight:900;font-family:'Space Mono',monospace}
+  .stat .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .pieza-cot{border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .pieza-cot-head{background:var(--panel-2);padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pieza-cot-head .t{font-weight:700}
+  .add-cot{padding:12px 16px;background:var(--panel);border-top:1px dashed var(--line)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;border:none;color:var(--muted);padding:7px 12px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600}
+  .seg button.on{background:var(--green);color:#0f1410}
+  .chk{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.15s}
+  .chk.on{background:var(--green);border-color:var(--green)}
+  .chk svg{opacity:0;transition:.15s}
+  .chk.on svg{opacity:1}
+  .help{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+  .right{text-align:right}
+  .totbar{position:sticky;bottom:0;background:linear-gradient(transparent,var(--bg) 30%);padding-top:20px;margin-top:10px}
+  .totcard{background:var(--green);color:#0f1410;border-radius:14px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  .totcard .big{font-size:30px;font-weight:900;font-family:'Space Mono',monospace}
+  select.mini{padding:6px 8px;font-size:13px}
+  .flag{font-size:12px;padding:2px 7px;border-radius:5px;font-weight:600}
+  .flag.usd{background:#15331f;color:#6fd38a}
+  .flag.ars{background:#33270f;color:var(--amber)}
+  @media(max-width:640px){
+    .grid-2{grid-template-columns:1fr}
+    header{padding:12px 14px}
+    main{padding:14px}
+    .tc-box{margin-left:0;width:100%;justify-content:space-between}
+    table{font-size:13px}
+    th,td{padding:7px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🌾 Agro<span>Repuestos</span></div>
+  <div class="tc-box">
+    <span>TC BNA Venta</span>
+    <b>$<input type="number" id="tcInput" step="0.01"></b>
+    <button class="btn sm ghost" id="tcRefresh" title="Actualizar desde internet">↻</button>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-view="catalogo">Catálogo de piezas</button>
+  <button data-view="pedido">Pedido <span class="badge" id="badgePedido">0</span></button>
+  <button data-view="cotizaciones">Cotizaciones</button>
+  <button data-view="comparativo">Comparativo</button>
+  <button data-view="compra">Orden de compra</button>
+</nav>
+
+<main>
+
+  <!-- ================= CATALOGO ================= -->
+  <section class="view active" id="view-catalogo">
+    <h2>Catálogo de piezas</h2>
+    <p class="sub">Todos los repuestos por marca, implemento y categoría. Usá los filtros para encontrar rápido.</p>
+
+    <div class="toolbar">
+      <div class="field" style="flex:2;min-width:200px">
+        <label>Buscar</label>
+        <input id="fBuscar" placeholder="Código, descripción...">
+      </div>
+      <div class="field"><label>Marca</label><select id="fMarca"></select></div>
+      <div class="field"><label>Implemento</label><select id="fImpl"></select></div>
+      <div class="field"><label>Categoría</label><select id="fCat"></select></div>
+      <button class="btn" id="btnNuevaPieza">+ Cargar pieza</button>
+      <button class="btn ghost" id="btnPdfCatalogo">📄 PDF / Imprimir</button>
+      <button class="btn ghost" id="btnCsvCatalogo">⬇ CSV</button>
+    </div>
+
+    <div class="card" style="padding:0;overflow:auto">
+      <table id="tblPiezas">
+        <thead><tr>
+          <th>Marca</th><th>Implemento</th><th>Categoría</th>
+          <th>Descripción</th><th>Cód. original</th><th>Cód. alternativo</th>
+          <th class="right">Acción</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= PEDIDO ================= -->
+  <section class="view" id="view-pedido">
+    <h2>Pedido de presupuesto</h2>
+    <p class="sub">Las piezas que agregaste desde el catálogo. Ajustá cantidades y pasá a cargar cotizaciones.</p>
+
+    <div class="toolbar">
+      <div class="field" style="flex:2;min-width:180px"><label>Buscar pieza</label>
+        <input id="fpBuscar" placeholder="Descripción, código..."></div>
+      <div class="field"><label>Implemento</label><select id="fpImpl"></select></div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn" id="btnIrCotizar">Cargar cotizaciones →</button>
+      <button class="btn ghost" id="btnPdfPedido">📄 PDF / Imprimir</button>
+      <button class="btn ghost" id="btnCsvPedido">⬇ CSV</button>
+      <button class="btn ghost" id="btnVaciarPedido">Vaciar pedido</button>
+    </div>
+
+    <div class="card" style="padding:0;overflow:auto">
+      <table id="tblPedido">
+        <thead><tr>
+          <th>Pieza</th><th>Implemento</th><th>Categoría</th><th>Cód. original</th><th>Cód. alternativo</th>
+          <th class="right">Cantidad</th><th class="right">Quitar</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= COTIZACIONES ================= -->
+  <section class="view" id="view-cotizaciones">
+    <h2>Cargar cotizaciones de proveedores</h2>
+    <p class="sub">Por cada pieza del pedido, agregá lo que te pasó cada proveedor. Cargás en pesos o dólares, con IVA final o + IVA. La app convierte todo a <b>ARS final</b> para comparar.</p>
+    <div id="cotContainer"></div>
+    <datalist id="dlProv"></datalist>
+  </section>
+
+  <!-- ================= COMPARATIVO ================= -->
+  <section class="view" id="view-comparativo">
+    <h2>Comparativo de precios</h2>
+    <p class="sub">Todas las cotizaciones de cada pieza, normalizadas a <b>ARS final por unidad</b>. El mejor precio queda resaltado. Tocá el botón para elegir cuál comprás.</p>
+    <div id="compContainer"></div>
+  </section>
+
+  <!-- ================= COMPRA ================= -->
+  <section class="view" id="view-compra">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+      <div>
+        <h2>Orden de compra</h2>
+        <p class="sub" style="margin-bottom:0">Las piezas que elegiste con su proveedor y precio. Esto es lo que tenés que abonar.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn amber" id="btnCerrarPedido">🔒 Cerrar pedido</button>
+        <div class="dropdown" id="ddPdf">
+          <button class="btn ghost" id="btnPdfMenu">📄 PDF ▾</button>
+          <div class="dropdown-menu">
+            <button id="btnPdfCompraFull">Completo</button>
+            <button id="btnPdfCompraFilt">Filtrado</button>
+          </div>
+        </div>
+        <div class="dropdown" id="ddCsv">
+          <button class="btn ghost" id="btnCsvMenu">⬇ CSV ▾</button>
+          <div class="dropdown-menu">
+            <button id="btnCsvCompraFull">Completo</button>
+            <button id="btnCsvCompraFilt">Filtrado</button>
+          </div>
+        </div>
+        <div class="dropdown" id="ddProv">
+          <button class="btn ghost" id="btnProvMenu">📤 Para proveedores ▾</button>
+          <div class="dropdown-menu">
+            <button id="btnProvPorProv">Un CSV por proveedor</button>
+            <button id="btnProvTodo">Un CSV con todo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:16px">
+      <div><div class="l" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600">Orden Nº</div>
+        <div class="mono" style="font-size:22px;font-weight:700;color:var(--green-bright)" id="ordenNro">—</div></div>
+      <div style="flex:1;min-width:180px"><div class="l" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600">Referencia / Nombre del pedido</div>
+        <input id="ordenRef" placeholder="Ej: Despiece Juan - Cosecha 2026" style="width:100%;margin-top:3px"></div>
+    </div>
+
+    <div class="toolbar">
+      <div class="field" style="min-width:240px"><label>Filtrar por proveedor</label>
+        <select id="fCompra"></select></div>
+    </div>
+
+    <div class="stat-row" id="compraStats"></div>
+    <div class="card" style="padding:0;overflow:auto">
+      <table id="tblCompra">
+        <thead><tr>
+          <th>Pieza</th><th>Cód. original</th><th>Cód. alternativo</th><th>Proveedor</th><th class="right">Cant.</th>
+          <th class="right">Precio unit. (ARS final)</th><th class="right">Subtotal</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="totbar"><div class="totcard">
+      <div><div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Total a abonar</div>
+      <div style="font-size:12px;opacity:.7" id="compraNota"></div></div>
+      <div class="big" id="compraTotal">$0</div>
+    </div></div>
+
+    <!-- ===== PEDIDOS CERRADOS ===== -->
+    <h2 style="margin-top:34px">Pedidos cerrados</h2>
+    <p class="sub">Historial de órdenes finalizadas. Podés reabrirlas, editar la referencia o eliminarlas.</p>
+    <div class="card" style="padding:0;overflow:auto">
+      <table id="tblCerrados">
+        <thead><tr>
+          <th>Orden Nº</th><th>Referencia</th><th>Fecha</th><th class="right">Piezas</th>
+          <th class="right">Total (ARS)</th><th class="right">Acciones</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== MODAL NUEVA PIEZA ===== -->
+<div class="modal-bg" id="modalPieza">
+  <div class="modal">
+    <h3 id="modalPiezaTitle">Cargar pieza al catálogo</h3>
+    <div class="grid-2">
+      <div class="field"><label>Marca</label><input id="mMarca" placeholder="Ej: New Holland" list="dlMarca"></div>
+      <div class="field"><label>Implemento</label><input id="mImpl" placeholder="Ej: Tractor T7.260" list="dlImpl"></div>
+    </div>
+    <div class="field"><label>Categoría</label><input id="mCat" placeholder="Ej: Rodamiento" list="dlCat"></div>
+    <div class="field"><label>Descripción</label><input id="mDesc" placeholder="Ej: Rodamiento rueda delantera"></div>
+    <div class="grid-2">
+      <div class="field"><label>Código original</label><input id="mCodO" placeholder="Ej: 87312345"></div>
+      <div class="field"><label>Código alternativo</label><input id="mCodA" placeholder="Ej: SKF-6205"></div>
+    </div>
+    <datalist id="dlMarca"></datalist><datalist id="dlImpl"></datalist><datalist id="dlCat"></datalist>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn" id="mGuardar">Guardar pieza</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- almacenamiento ---------- */
+const DB={
+  piezas:[], pedido:[], cots:[], proveedores:[], tc:1000,
+  ordenSeq:1, ordenNro:1, ordenRef:'', cerrados:[],
+  load(){try{const d=JSON.parse(localStorage.getItem('agro')||'{}');Object.assign(this,d)}catch(e){}},
+  save(){localStorage.setItem('agro',JSON.stringify({piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados}))}
+};
+const uid=()=>Math.random().toString(36).slice(2,9);
+const fmt=n=>'$'+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const ordenCod=n=>'OC-'+String(n).padStart(4,'0');
+
+/* ---------- semilla de ejemplo ---------- */
+function seed(){
+  // Sin datos de ejemplo: la app arranca vacía y se va llenando con lo que cargues.
+  return;
+}
+
+/* ---------- navegación ---------- */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('view-'+b.dataset.view).classList.add('active');
+  if(b.dataset.view==='cotizaciones')renderCot();
+  if(b.dataset.view==='comparativo')renderComp();
+  if(b.dataset.view==='compra')renderCompra();
+});
+
+/* ---------- TC ---------- */
+const tcInput=document.getElementById('tcInput');
+function setTC(v){DB.tc=Number(v)||DB.tc;tcInput.value=DB.tc;DB.save()}
+tcInput.onchange=()=>{setTC(tcInput.value);renderCot();renderComp();renderCompra()};
+document.getElementById('tcRefresh').onclick=async()=>{
+  const btn=document.getElementById('tcRefresh');btn.textContent='…';
+  try{
+    const r=await fetch('https://dolarapi.com/v1/cotizaciones/oficial');
+    const j=await r.json();
+    if(j&&j.venta){setTC(j.venta);renderCot();renderComp();renderCompra();}
+  }catch(e){alert('No se pudo traer la cotización automática. Cargala a mano en el campo TC.');}
+  btn.textContent='↻';
+};
+
+/* ---------- filtros / selects ---------- */
+function uniq(arr){return [...new Set(arr)].sort()}
+function fillSelect(sel,vals,label){
+  sel.innerHTML='<option value="">'+label+'</option>'+vals.map(v=>`<option>${v}</option>`).join('');
+}
+function refreshFilters(){
+  fillSelect(fMarca,uniq(DB.piezas.map(p=>p.marca)),'Todas las marcas');
+  fillSelect(fImpl,uniq(DB.piezas.map(p=>p.impl)),'Todos los implementos');
+  fillSelect(fCat,uniq(DB.piezas.map(p=>p.cat)),'Todas las categorías');
+  dlMarca.innerHTML=uniq(DB.piezas.map(p=>p.marca)).map(v=>`<option>${v}</option>`).join('');
+  dlImpl.innerHTML=uniq(DB.piezas.map(p=>p.impl)).map(v=>`<option>${v}</option>`).join('');
+  dlCat.innerHTML=uniq(DB.piezas.map(p=>p.cat)).map(v=>`<option>${v}</option>`).join('');
+}
+const fBuscar=document.getElementById('fBuscar'),fMarca=document.getElementById('fMarca'),
+      fImpl=document.getElementById('fImpl'),fCat=document.getElementById('fCat'),
+      dlMarca=document.getElementById('dlMarca'),dlImpl=document.getElementById('dlImpl'),dlCat=document.getElementById('dlCat');
+[fBuscar,fMarca,fImpl,fCat].forEach(e=>e.oninput=renderPiezas);
+
+/* ---------- catálogo ---------- */
+function piezasFiltradas(){
+  const q=fBuscar.value.toLowerCase();
+  return DB.piezas.filter(p=>
+    (!fMarca.value||p.marca===fMarca.value)&&
+    (!fImpl.value||p.impl===fImpl.value)&&
+    (!fCat.value||p.cat===fCat.value)&&
+    (!q||[p.desc,p.codO,p.codA,p.marca,p.impl].join(' ').toLowerCase().includes(q))
+  );
+}
+function renderPiezas(){
+  const rows=piezasFiltradas();
+  const tb=document.querySelector('#tblPiezas tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">Sin piezas. Cargá la primera con “+ Cargar pieza”.</div></td></tr>`;return}
+  tb.innerHTML=rows.map(p=>{
+    const inPed=DB.pedido.some(x=>x.piezaId===p.id);
+    return `<tr>
+      <td><span class="pill">${p.marca}</span></td>
+      <td>${p.impl}</td>
+      <td><span class="pill cat">${p.cat}</span></td>
+      <td>${p.desc}</td>
+      <td class="mono">${p.codO||'—'}</td>
+      <td class="mono">${p.codA||'—'}</td>
+      <td class="right">
+        ${inPed?'<span class="flag ars">En pedido</span>':`<button class="btn sm" onclick="addPedido('${p.id}')">+ Pedido</button>`}
+        <button class="btn ghost sm" onclick="editPieza('${p.id}')">✎</button>
+        <button class="btn danger sm" onclick="delPieza('${p.id}')">✕</button>
+      </td></tr>`;
+  }).join('');
+}
+function delPieza(id){
+  if(!confirm('¿Eliminar esta pieza del catálogo?'))return;
+  DB.piezas=DB.piezas.filter(p=>p.id!==id);
+  DB.pedido=DB.pedido.filter(x=>x.piezaId!==id);
+  DB.cots=DB.cots.filter(c=>c.piezaId!==id);
+  DB.save();refreshFilters();renderPiezas();renderBadge();
+}
+
+/* ---------- modal pieza ---------- */
+const modal=document.getElementById('modalPieza');
+let editPiezaId=null;
+document.getElementById('btnNuevaPieza').onclick=()=>{
+  editPiezaId=null;
+  document.getElementById('modalPiezaTitle').textContent='Cargar pieza al catálogo';
+  document.getElementById('mGuardar').textContent='Guardar pieza';
+  ['mMarca','mImpl','mCat','mDesc','mCodO','mCodA'].forEach(i=>document.getElementById(i).value='');
+  modal.classList.add('open');
+};
+function editPieza(id){
+  const p=DB.piezas.find(x=>x.id===id);if(!p)return;
+  editPiezaId=id;
+  document.getElementById('modalPiezaTitle').textContent='Editar pieza';
+  document.getElementById('mGuardar').textContent='Guardar cambios';
+  mMarca.value=p.marca;mImpl.value=p.impl;mCat.value=p.cat;mDesc.value=p.desc;mCodO.value=p.codO;mCodA.value=p.codA;
+  modal.classList.add('open');
+}
+function closeModal(){modal.classList.remove('open')}
+modal.onclick=e=>{if(e.target===modal)closeModal()};
+document.getElementById('mGuardar').onclick=()=>{
+  const datos={marca:mMarca.value.trim(),impl:mImpl.value.trim(),cat:mCat.value.trim(),
+    desc:mDesc.value.trim(),codO:mCodO.value.trim(),codA:mCodA.value.trim()};
+  if(!datos.desc||!datos.marca){alert('Marca y descripción son obligatorias.');return}
+  if(editPiezaId){
+    const p=DB.piezas.find(x=>x.id===editPiezaId);Object.assign(p,datos);
+  }else{
+    DB.piezas.push({id:uid(),...datos});
+  }
+  DB.save();refreshFilters();renderPiezas();renderPedido();renderBadge();closeModal();
+};
+const mMarca=document.getElementById('mMarca'),mImpl=document.getElementById('mImpl'),mCat=document.getElementById('mCat'),
+      mDesc=document.getElementById('mDesc'),mCodO=document.getElementById('mCodO'),mCodA=document.getElementById('mCodA');
+
+/* ---------- pedido ---------- */
+function addPedido(piezaId){
+  if(DB.pedido.some(x=>x.piezaId===piezaId))return;
+  DB.pedido.push({piezaId,qty:1});DB.save();renderPiezas();renderPedido();renderBadge();
+}
+function renderBadge(){document.getElementById('badgePedido').textContent=DB.pedido.length}
+const fpBuscar=document.getElementById('fpBuscar'),fpImpl=document.getElementById('fpImpl');
+fpBuscar.oninput=renderPedido;fpImpl.onchange=renderPedido;
+function renderPedido(){
+  const tb=document.querySelector('#tblPedido tbody');
+  // armar lista de implementos presentes en el pedido para el select
+  const piezasPedido=DB.pedido.map(it=>DB.piezas.find(x=>x.id===it.piezaId)).filter(Boolean);
+  const impls=uniq(piezasPedido.map(p=>p.impl).filter(Boolean));
+  const selImpl=fpImpl.value;
+  fpImpl.innerHTML='<option value="">Todos los implementos</option>'+impls.map(i=>`<option${i===selImpl?' selected':''}>${i}</option>`).join('');
+  if(!DB.pedido.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">Pedido vacío. Agregá piezas desde el catálogo.</div></td></tr>`;return}
+  const q=(fpBuscar.value||'').toLowerCase();
+  const rows=DB.pedido.filter(it=>{
+    const p=DB.piezas.find(x=>x.id===it.piezaId);if(!p)return false;
+    return (!fpImpl.value||p.impl===fpImpl.value)&&
+           (!q||[p.desc,p.codO,p.codA,p.impl,p.cat].join(' ').toLowerCase().includes(q));
+  });
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">Ninguna pieza coincide con el filtro.</div></td></tr>`;return}
+  tb.innerHTML=rows.map(it=>{
+    const p=DB.piezas.find(x=>x.id===it.piezaId);if(!p)return'';
+    return `<tr>
+      <td>${p.desc}</td><td>${p.impl}</td><td><span class="pill cat">${p.cat}</span></td>
+      <td class="mono">${p.codO||'—'}</td>
+      <td class="mono">${p.codA||'—'}</td>
+      <td class="right"><input class="qty" type="number" min="1" value="${it.qty}" onchange="setQty('${it.piezaId}',this.value)"></td>
+      <td class="right"><button class="btn danger sm" onclick="delPedido('${it.piezaId}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+function setQty(id,v){const it=DB.pedido.find(x=>x.piezaId===id);it.qty=Math.max(1,parseInt(v)||1);DB.save()}
+function delPedido(id){DB.pedido=DB.pedido.filter(x=>x.piezaId!==id);DB.cots=DB.cots.filter(c=>c.piezaId!==id);DB.save();renderPedido();renderPiezas();renderBadge()}
+document.getElementById('btnVaciarPedido').onclick=()=>{if(confirm('¿Vaciar todo el pedido?')){DB.pedido=[];DB.cots=[];DB.save();renderPedido();renderPiezas();renderBadge()}};
+document.getElementById('btnIrCotizar').onclick=()=>{if(!DB.pedido.length){alert('Primero agregá piezas al pedido.');return}document.querySelector('[data-view=cotizaciones]').click()};
+
+/* ---------- cotizaciones ---------- */
+// convierte cualquier cotización a ARS FINAL por unidad
+function toArsFinal(c){
+  let base=Number(c.precio)||0;
+  if(c.moneda==='USD')base=base*DB.tc;
+  if(c.iva==='mas'){const al=c.alic==='105'?1.105:1.21;base=base*al;}
+  return base; // ya es final por unidad
+}
+function refreshProv(){
+  const dl=document.getElementById('dlProv');
+  if(dl)dl.innerHTML=[...DB.proveedores].sort((a,b)=>a.localeCompare(b,'es')).map(v=>`<option value="${v}">`).join('');
+}
+function renderCot(){
+  refreshProv();
+  const cont=document.getElementById('cotContainer');
+  if(!DB.pedido.length){cont.innerHTML=`<div class="empty">No hay piezas en el pedido todavía.</div>`;return}
+  cont.innerHTML=DB.pedido.map(it=>{
+    const p=DB.piezas.find(x=>x.id===it.piezaId);if(!p)return'';
+    const cots=DB.cots.filter(c=>c.piezaId===p.id);
+    return `<div class="pieza-cot">
+      <div class="pieza-cot-head">
+        <span class="t">${p.desc}</span>
+        <span class="pill">${p.marca}</span><span class="pill cat">${p.cat}</span>
+        <span class="mono" style="color:var(--muted)">orig: ${p.codO||'—'}</span>
+        <span style="margin-left:auto" class="pill">Cant: ${it.qty}</span>
+      </div>
+      <div style="overflow:auto">
+      <table><thead><tr><th>Proveedor</th><th>Precio</th><th>Moneda</th><th>IVA</th><th>Alíc.</th><th class="right">ARS final/u</th><th></th></tr></thead>
+      <tbody>
+      ${cots.length?cots.map(c=>`<tr>
+        <td>${c.prov}</td>
+        <td class="price">${Number(c.precio).toLocaleString('es-AR')}</td>
+        <td><span class="flag ${c.moneda==='USD'?'usd':'ars'}">${c.moneda}</span></td>
+        <td>${c.iva==='mas'?'+ IVA':'final'}</td>
+        <td>${c.iva==='mas'?(c.alic==='105'?'10,5%':'21%'):'—'}</td>
+        <td class="right price">${fmt(toArsFinal(c))}</td>
+        <td class="right"><button class="btn danger sm" onclick="delCot('${c.id}')">✕</button></td>
+      </tr>`).join(''):`<tr><td colspan="7" style="color:var(--muted)">Sin cotizaciones cargadas.</td></tr>`}
+      </tbody></table></div>
+      <div class="add-cot">
+        <div class="toolbar" style="margin:0;align-items:flex-end">
+          <div class="field" style="flex:2;min-width:140px"><label>Proveedor</label><input id="cp-prov-${p.id}" placeholder="Nombre proveedor" list="dlProv" autocomplete="off"></div>
+          <div class="field"><label>Precio</label><input id="cp-precio-${p.id}" type="number" step="0.01" placeholder="0.00" style="width:110px"></div>
+          <div class="field"><label>Moneda</label>
+            <select id="cp-moneda-${p.id}" class="mini"><option value="ARS">$ Pesos</option><option value="USD">U$D Dólar</option></select></div>
+          <div class="field"><label>IVA</label>
+            <select id="cp-iva-${p.id}" class="mini"><option value="final">IVA final</option><option value="mas">+ IVA</option></select></div>
+          <div class="field"><label>Alícuota</label>
+            <select id="cp-alic-${p.id}" class="mini"><option value="21">21%</option><option value="105">10,5%</option></select></div>
+          <button class="btn sm" onclick="addCot('${p.id}')">+ Agregar cotización</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function addCot(piezaId){
+  const prov=document.getElementById('cp-prov-'+piezaId).value.trim();
+  const precio=document.getElementById('cp-precio-'+piezaId).value;
+  if(!prov||!precio){alert('Cargá proveedor y precio.');return}
+  if(!DB.proveedores.some(x=>x.toLowerCase()===prov.toLowerCase()))DB.proveedores.push(prov);
+  DB.cots.push({id:uid(),piezaId,prov,precio:Number(precio),
+    moneda:document.getElementById('cp-moneda-'+piezaId).value,
+    iva:document.getElementById('cp-iva-'+piezaId).value,
+    alic:document.getElementById('cp-alic-'+piezaId).value});
+  DB.save();renderCot();
+}
+function delCot(id){const c=DB.cots.find(x=>x.id===id);DB.cots=DB.cots.filter(x=>x.id!==id);
+  // si era la elegida, deseleccionar
+  DB.cots.filter(x=>x.piezaId===c.piezaId).forEach(x=>{});DB.save();renderCot()}
+
+/* ---------- comparativo ---------- */
+function renderComp(){
+  const cont=document.getElementById('compContainer');
+  const piezasConCot=DB.pedido.filter(it=>DB.cots.some(c=>c.piezaId===it.piezaId));
+  if(!piezasConCot.length){cont.innerHTML=`<div class="empty">Todavía no hay cotizaciones cargadas para comparar.</div>`;return}
+  cont.innerHTML=piezasConCot.map(it=>{
+    const p=DB.piezas.find(x=>x.id===it.piezaId);
+    let cots=DB.cots.filter(c=>c.piezaId===p.id).map(c=>({...c,ars:toArsFinal(c),total:toArsFinal(c)*it.qty}));
+    const min=Math.min(...cots.map(c=>c.ars));
+    cots.sort((a,b)=>a.ars-b.ars);
+    return `<div class="pieza-cot">
+      <div class="pieza-cot-head"><span class="t">${p.desc}</span>
+        <span class="pill cat">${p.cat}</span><span class="pill">Cant: ${it.qty}</span></div>
+      <div style="overflow:auto"><table>
+      <thead><tr><th>Proveedor</th><th class="right">ARS final/u</th><th class="right">Total (×${it.qty})</th><th>Mejor</th><th class="right">Elegir</th></tr></thead>
+      <tbody>${cots.map(c=>{
+        const best=c.ars===min, chosen=isChosen(p.id,c.id);
+        return `<tr class="${best?'best-row':''}">
+          <td>${c.prov} ${best?'<span class="tag-best">Mejor precio</span>':''}</td>
+          <td class="right price ${best?'win':''}">${fmt(c.ars)}</td>
+          <td class="right price ${best?'win':''}">${fmt(c.total)}</td>
+          <td>${best?'✅':'—'}</td>
+          <td class="right">
+            <button class="chk ${chosen?'on':''}" onclick="choose('${p.id}','${c.id}')" title="Elegir para comprar">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f1410" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg>
+            </button>
+          </td></tr>`;
+      }).join('')}</tbody></table></div>
+    </div>`;
+  }).join('');
+}
+function isChosen(piezaId,cotId){const it=DB.pedido.find(x=>x.piezaId===piezaId);return it&&it.chosen===cotId}
+function choose(piezaId,cotId){
+  const it=DB.pedido.find(x=>x.piezaId===piezaId);
+  it.chosen=(it.chosen===cotId)?null:cotId;DB.save();renderComp();
+}
+
+/* ---------- compra ---------- */
+function elegidasActuales(){
+  return DB.pedido.filter(it=>it.chosen).map(it=>{
+    const p=DB.piezas.find(x=>x.id===it.piezaId);
+    const c=DB.cots.find(x=>x.id===it.chosen);if(!p||!c)return null;
+    const u=toArsFinal(c);
+    return{desc:p.desc,codO:p.codO||'',codA:p.codA||'',prov:c.prov,qty:it.qty,u,sub:u*it.qty,
+           precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21'};
+  }).filter(Boolean);
+}
+const fCompra=document.getElementById('fCompra');
+fCompra.onchange=renderCompra;
+document.getElementById('ordenRef').oninput=e=>{DB.ordenRef=e.target.value;DB.save()};
+
+// elegidas según el filtro de proveedor actual
+function elegidasFiltradas(){
+  const prov=fCompra.value||'';
+  const all=elegidasActuales();
+  return prov?all.filter(e=>e.prov===prov):all;
+}
+
+function renderCompra(){
+  document.getElementById('ordenNro').textContent=ordenCod(DB.ordenNro);
+  document.getElementById('ordenRef').value=DB.ordenRef||'';
+  const tb=document.querySelector('#tblCompra tbody');
+  const todas=elegidasActuales();
+  // llenar el select de proveedores conservando la selección
+  const provsAll=uniq(todas.map(e=>e.prov));
+  const sel=fCompra.value;
+  fCompra.innerHTML='<option value="">Todos los proveedores</option>'+provsAll.map(p=>`<option${p===sel?' selected':''}>${p}</option>`).join('');
+  let elegidas=elegidasFiltradas();
+  const filtrando=!!fCompra.value;
+  const stats=document.getElementById('compraStats');
+  if(!elegidas.length){
+    tb.innerHTML=`<tr><td colspan="7"><div class="empty">No hay piezas elegidas${filtrando?' para este proveedor':''}. Andá al Comparativo y tocá el ✓ en la que vas a comprar.</div></td></tr>`;
+    stats.innerHTML='';document.getElementById('compraTotal').textContent='$0';document.getElementById('compraNota').textContent='';
+  }else{
+    tb.innerHTML=elegidas.map(e=>`<tr>
+      <td>${e.desc}</td><td class="mono">${e.codO||'—'}</td><td class="mono">${e.codA||'—'}</td>
+      <td>${e.prov}</td><td class="right">${e.qty}</td>
+      <td class="right price">${fmt(e.u)}</td><td class="right price win">${fmt(e.sub)}</td></tr>`).join('');
+    const total=elegidas.reduce((s,e)=>s+e.sub,0);
+    const provs=uniq(elegidas.map(e=>e.prov));
+    stats.innerHTML=`
+      <div class="stat"><div class="n">${elegidas.length}</div><div class="l">Piezas${filtrando?' (filtradas)':''}</div></div>
+      <div class="stat"><div class="n">${provs.length}</div><div class="l">Proveedores</div></div>
+      <div class="stat"><div class="n">${elegidas.reduce((s,e)=>s+e.qty,0)}</div><div class="l">Unidades</div></div>`;
+    document.getElementById('compraTotal').textContent=fmt(total);
+    document.getElementById('compraNota').textContent=`${filtrando?'Filtrado: '+fCompra.value+' · ':''}Todo en ARS final · TC usado $${DB.tc}`;
+  }
+  renderCerrados();
+}
+
+/* ---------- cerrar / historial ---------- */
+document.getElementById('btnCerrarPedido').onclick=()=>{
+  const elegidas=elegidasActuales();
+  if(!elegidas.length){alert('No hay piezas elegidas para cerrar el pedido.');return}
+  if(!confirm('¿Cerrar este pedido? Se guardará en el historial y empezás uno nuevo.'))return;
+  const total=elegidas.reduce((s,e)=>s+e.sub,0);
+  DB.cerrados.unshift({
+    id:uid(), nro:DB.ordenNro, ref:DB.ordenRef||'(sin referencia)',
+    fecha:new Date().toLocaleDateString('es-AR'), tc:DB.tc,
+    items:elegidas, total
+  });
+  // arrancar pedido nuevo
+  DB.ordenSeq++; DB.ordenNro=DB.ordenSeq; DB.ordenRef='';
+  DB.pedido=[]; DB.cots=[];
+  DB.save();
+  renderPedido();renderPiezas();renderBadge();renderCompra();
+  alert('Pedido cerrado. Quedó guardado en “Pedidos cerrados”.');
+};
+
+function renderCerrados(){
+  const tb=document.querySelector('#tblCerrados tbody');
+  if(!DB.cerrados.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty">Todavía no cerraste ningún pedido.</div></td></tr>`;return}
+  tb.innerHTML=DB.cerrados.map(o=>`<tr>
+    <td class="mono" style="color:var(--green-bright)">${ordenCod(o.nro)}</td>
+    <td>${o.ref}</td><td>${o.fecha}</td>
+    <td class="right">${o.items.length}</td>
+    <td class="right price">${fmt(o.total)}</td>
+    <td class="right" style="white-space:nowrap">
+      <button class="btn sm" onclick="reabrirCerrado('${o.id}')" title="Reabrir">↩ Abrir</button>
+      <button class="btn ghost sm" onclick="editarCerrado('${o.id}')" title="Editar referencia">✎</button>
+      <button class="btn ghost sm" onclick="pdfCerrado('${o.id}')" title="PDF">📄</button>
+      <button class="btn danger sm" onclick="eliminarCerrado('${o.id}')" title="Eliminar">✕</button>
+    </td></tr>`).join('');
+}
+function reabrirCerrado(id){
+  const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
+  if(elegidasActuales().length||DB.pedido.length){
+    if(!confirm('Tenés un pedido en curso. Si reabrís este, se reemplaza el actual. ¿Seguir?'))return;
+  }
+  // reconstruir piezas/pedido/cots desde el cerrado
+  o.items.forEach(it=>{
+    let p=DB.piezas.find(x=>x.desc===it.desc&&x.codO===it.codO);
+    if(!p){p={id:uid(),marca:'',impl:'',cat:'',desc:it.desc,codO:it.codO,codA:it.codA};DB.piezas.push(p);}
+    const cId=uid();
+    DB.cots.push({id:cId,piezaId:p.id,prov:it.prov,precio:it.u,moneda:'ARS',iva:'final',alic:'21'});
+    DB.pedido.push({piezaId:p.id,qty:it.qty,chosen:cId});
+  });
+  DB.ordenNro=o.nro; DB.ordenRef=o.ref;
+  DB.cerrados=DB.cerrados.filter(x=>x.id!==id);
+  DB.save();refreshFilters();renderPiezas();renderPedido();renderBadge();renderCompra();
+  document.querySelector('[data-view=compra]').click();
+}
+function editarCerrado(id){
+  const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
+  const nr=prompt('Nueva referencia para '+ordenCod(o.nro)+':',o.ref);
+  if(nr!==null){o.ref=nr.trim()||'(sin referencia)';DB.save();renderCerrados()}
+}
+function eliminarCerrado(id){
+  const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
+  if(!confirm('¿Eliminar definitivamente '+ordenCod(o.nro)+'? No se puede deshacer.'))return;
+  DB.cerrados=DB.cerrados.filter(x=>x.id!==id);DB.save();renderCerrados();
+}
+
+/* ---------- PDF / impresión ---------- */
+function abrirImpresion(titulo,subtitulo,headers,filas,totalLabel,totalValor){
+  const w=window.open('','_blank');
+  const filasHtml=filas.map(f=>'<tr>'+f.map((c,i)=>`<td class="${i>=f.length-1?'r':''}">${c}</td>`).join('')+'</tr>').join('');
+  const totalHtml=totalLabel?`<div class="tot"><span>${totalLabel}</span><b>${totalValor}</b></div>`:'';
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${titulo}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;padding:28px;max-width:900px;margin:auto}
+    h1{font-size:20px;margin:0 0 2px} .sub{color:#666;font-size:13px;margin-bottom:4px}
+    .meta{color:#888;font-size:12px;margin-bottom:18px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{background:#2e7d32;color:#fff;text-align:left;padding:8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+    td{padding:7px 8px;border-bottom:1px solid #ddd} td.r,th.r{text-align:right}
+    tr:nth-child(even) td{background:#f5f7f4}
+    .tot{margin-top:16px;background:#2e7d32;color:#fff;padding:12px 16px;border-radius:6px;display:flex;justify-content:space-between;font-size:16px;align-items:center}
+    .tot b{font-size:20px}
+    .foot{margin-top:22px;color:#aaa;font-size:11px;text-align:center}
+    @media print{.noprint{display:none}}
+  </style></head><body>
+    <h1>${titulo}</h1>
+    <div class="sub">${subtitulo||''}</div>
+    <div class="meta">Generado el ${new Date().toLocaleString('es-AR')}</div>
+    <table><thead><tr>${headers.map((h,i)=>`<th class="${i>=headers.length-1?'r':''}">${h}</th>`).join('')}</tr></thead>
+    <tbody>${filasHtml}</tbody></table>
+    ${totalHtml}
+    <div class="foot">AgroRepuestos</div>
+    <div class="noprint" style="text-align:center;margin-top:20px">
+      <button onclick="window.print()" style="padding:10px 20px;font-size:14px;background:#2e7d32;color:#fff;border:none;border-radius:6px;cursor:pointer">Imprimir / Guardar PDF</button>
+    </div>
+  </body></html>`);
+  w.document.close();
+}
+function descargarCSV(nombre,headers,filas){
+  const esc=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const csv=[headers.map(esc).join(','),...filas.map(f=>f.map(esc).join(','))].join('\r\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=nombre+'.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
+// Catálogo
+document.getElementById('btnPdfCatalogo').onclick=()=>{
+  const rows=piezasFiltradas().map(p=>[p.marca,p.impl,p.cat,p.desc,p.codO||'',p.codA||'']);
+  if(!rows.length){alert('No hay piezas para exportar.');return}
+  abrirImpresion('Catálogo de piezas','',['Marca','Implemento','Categoría','Descripción','Cód. original','Cód. alternativo'],rows);
+};
+document.getElementById('btnCsvCatalogo').onclick=()=>{
+  const rows=piezasFiltradas().map(p=>[p.marca,p.impl,p.cat,p.desc,p.codO||'',p.codA||'']);
+  descargarCSV('catalogo',['Marca','Implemento','Categoría','Descripción','Cód. original','Cód. alternativo'],rows);
+};
+// Pedido
+function pedidoRows(){return DB.pedido.map(it=>{const p=DB.piezas.find(x=>x.id===it.piezaId);return p?[p.desc,p.impl,p.cat,p.codO||'',p.codA||'',it.qty]:null}).filter(Boolean)}
+document.getElementById('btnPdfPedido').onclick=()=>{
+  const rows=pedidoRows();if(!rows.length){alert('El pedido está vacío.');return}
+  abrirImpresion('Pedido de presupuesto',DB.ordenRef||'',['Pieza','Implemento','Categoría','Cód. original','Cód. alternativo','Cantidad'],rows);
+};
+document.getElementById('btnCsvPedido').onclick=()=>{
+  const rows=pedidoRows();descargarCSV('pedido',['Pieza','Implemento','Categoría','Cód. original','Cód. alternativo','Cantidad'],rows);
+};
+// Orden de compra
+function compraRowsFmt(items){return items.map(e=>[e.desc,e.codO||'',e.codA||'',e.prov,e.qty,fmt(e.u),fmt(e.sub)])}
+const HEAD_COMPRA=['Pieza','Cód. original','Cód. alternativo','Proveedor','Cant.','Precio unit. ARS','Subtotal'];
+
+function exportarPDFCompra(items,suf){
+  if(!items.length){alert('No hay piezas para exportar.');return}
+  const total=items.reduce((s,e)=>s+e.sub,0);
+  abrirImpresion('Orden de compra '+ordenCod(DB.ordenNro),(DB.ordenRef||'')+(suf||''),
+    HEAD_COMPRA,compraRowsFmt(items),'TOTAL A ABONAR',fmt(total));
+}
+function exportarCSVCompra(items,suf){
+  if(!items.length){alert('No hay piezas para exportar.');return}
+  descargarCSV('orden-'+ordenCod(DB.ordenNro)+(suf||''),
+    ['Pieza','Cód. original','Cód. alternativo','Proveedor','Cantidad','Precio unit. ARS','Subtotal'],
+    items.map(e=>[e.desc,e.codO||'',e.codA||'',e.prov,e.qty,e.u,e.sub]));
+}
+document.getElementById('btnPdfCompraFull').onclick=()=>exportarPDFCompra(elegidasActuales(),'');
+document.getElementById('btnPdfCompraFilt').onclick=()=>exportarPDFCompra(elegidasFiltradas(),fCompra.value?' · '+fCompra.value:'');
+document.getElementById('btnCsvCompraFull').onclick=()=>exportarCSVCompra(elegidasActuales(),'-completa');
+document.getElementById('btnCsvCompraFilt').onclick=()=>exportarCSVCompra(elegidasFiltradas(),fCompra.value?'-'+fCompra.value:'');
+
+/* ---------- exportar para app de Proveedores ---------- */
+// mapea el IVA de repuestos al formato de la app de proveedores
+function ivaProveedores(e){
+  if(e.iva==='final')return'incluido';
+  return e.alic==='105'?'10.5':'21';
+}
+// columnas pensadas para que el importador de la app de Proveedores las lea directo
+const HEAD_PROV=['proveedor','fecha','descripcion','moneda','tipoIva','item_desc','item_codigo','cantidad','precio_unit'];
+function filaProv(e,fecha,descPpto){
+  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),e.desc,e.codO||'',e.qty,e.precio];
+}
+function exportarProveedores(porProveedor){
+  const items=elegidasActuales();
+  if(!items.length){alert('No hay piezas elegidas para exportar.');return}
+  const fecha=new Date().toISOString().slice(0,10);
+  const descPpto=(DB.ordenRef||'Orden '+ordenCod(DB.ordenNro));
+  if(porProveedor){
+    const provs=uniq(items.map(e=>e.prov));
+    provs.forEach(prov=>{
+      const filas=items.filter(e=>e.prov===prov).map(e=>filaProv(e,fecha,descPpto));
+      descargarCSV('proveedor-'+prov.replace(/[^\w\-]+/g,'_')+'-'+ordenCod(DB.ordenNro),HEAD_PROV,filas);
+    });
+    alert('Se descargó un CSV por cada proveedor ('+provs.length+').');
+  }else{
+    const filas=items.map(e=>filaProv(e,fecha,descPpto));
+    descargarCSV('proveedores-'+ordenCod(DB.ordenNro),HEAD_PROV,filas);
+  }
+}
+document.getElementById('btnProvPorProv').onclick=()=>exportarProveedores(true);
+document.getElementById('btnProvTodo').onclick=()=>exportarProveedores(false);
+
+/* ---------- desplegables PDF / CSV / Proveedores ---------- */
+const ddPdf=document.getElementById('ddPdf'),ddCsv=document.getElementById('ddCsv'),ddProv=document.getElementById('ddProv');
+function closeDropdowns(){ddPdf.classList.remove('open');ddCsv.classList.remove('open');ddProv.classList.remove('open')}
+document.getElementById('btnPdfMenu').onclick=e=>{e.stopPropagation();const o=ddPdf.classList.contains('open');closeDropdowns();if(!o)ddPdf.classList.add('open')};
+document.getElementById('btnCsvMenu').onclick=e=>{e.stopPropagation();const o=ddCsv.classList.contains('open');closeDropdowns();if(!o)ddCsv.classList.add('open')};
+document.getElementById('btnProvMenu').onclick=e=>{e.stopPropagation();const o=ddProv.classList.contains('open');closeDropdowns();if(!o)ddProv.classList.add('open')};
+// cerrar al elegir una opción
+ddPdf.querySelectorAll('.dropdown-menu button').forEach(b=>b.addEventListener('click',closeDropdowns));
+ddCsv.querySelectorAll('.dropdown-menu button').forEach(b=>b.addEventListener('click',closeDropdowns));
+ddProv.querySelectorAll('.dropdown-menu button').forEach(b=>b.addEventListener('click',closeDropdowns));
+// cerrar al hacer clic afuera
+document.addEventListener('click',e=>{if(!ddPdf.contains(e.target)&&!ddCsv.contains(e.target)&&!ddProv.contains(e.target))closeDropdowns()});
+function pdfCerrado(id){
+  const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
+  abrirImpresion('Orden de compra '+ordenCod(o.nro),o.ref+' · '+o.fecha,
+    ['Pieza','Cód. original','Cód. alternativo','Proveedor','Cant.','Precio unit. ARS','Subtotal'],
+    compraRowsFmt(o.items),'TOTAL A ABONAR',fmt(o.total));
+}
+
+/* ---------- init ---------- */
+DB.load();seed();
+// normalizar campos nuevos en datos guardados de versiones anteriores
+if(!DB.ordenSeq)DB.ordenSeq=1;
+if(!DB.ordenNro)DB.ordenNro=DB.ordenSeq;
+if(!Array.isArray(DB.cerrados))DB.cerrados=[];
+if(typeof DB.ordenRef!=='string')DB.ordenRef='';
+// recuperar proveedores ya escritos en cotizaciones anteriores
+DB.cots.forEach(c=>{if(c.prov&&!DB.proveedores.some(x=>x.toLowerCase()===c.prov.toLowerCase()))DB.proveedores.push(c.prov)});
+DB.save();
+setTC(DB.tc);refreshFilters();renderPiezas();renderPedido();renderBadge();
+// intento traer TC al abrir
+document.getElementById('tcRefresh').click();
+</script>
+</body>
+</html>
