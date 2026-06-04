@@ -69,6 +69,9 @@
   .btn.ghost:hover{border-color:var(--green);color:var(--green-bright)}
   .btn.amber{background:var(--amber)}
   .btn.amber:hover{filter:brightness(1.1)}
+  .conn{font-size:12px;font-weight:700;padding:5px 11px;border-radius:20px;border:1px solid var(--line)}
+  .conn.on{color:#0f1410;background:var(--green-bright);border-color:var(--green-bright)}
+  .conn.off{color:var(--amber);background:transparent;border-color:var(--amber)}
   .dropdown{position:relative;display:inline-block}
   .dropdown-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;min-width:170px;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.45)}
   .dropdown.open .dropdown-menu{display:block}
@@ -137,6 +140,7 @@
 
 <header>
   <div class="logo">🌾 Agro<span>Repuestos</span></div>
+  <span id="connStatus" class="conn off" title="Estado de conexión">● Conectando…</span>
   <div class="tc-box">
     <span>TC BNA Venta</span>
     <b>$<input type="number" id="tcInput" step="0.01"></b>
@@ -327,13 +331,40 @@
   </div>
 </div>
 
-<script>
-/* ---------- almacenamiento ---------- */
+<!-- Firebase (mismo proyecto que la app de proveedores) -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAjZ2kHa3XvJgVhPGTDerUEexcFO6kpDaI",
+  authDomain: "proveedores-empresa.firebaseapp.com",
+  databaseURL: "https://proveedores-empresa-default-rtdb.firebaseio.com",
+  projectId: "proveedores-empresa",
+  storageBucket: "proveedores-empresa.firebasestorage.app",
+  messagingSenderId: "1074116103684",
+  appId: "1:1074116103684:web:a37370cf08ca39b98e6f51"
+};
+const fbApp = initializeApp(firebaseConfig);
+const fbDb = getDatabase(fbApp);
+// Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
+const RAIZ = 'repuestos';
+
+/* ---------- almacenamiento (Firebase en tiempo real) ---------- */
 const DB={
   piezas:[], pedido:[], cots:[], proveedores:[], tc:1000,
   ordenSeq:1, ordenNro:1, ordenRef:'', cerrados:[],
-  load(){try{const d=JSON.parse(localStorage.getItem('agro')||'{}');Object.assign(this,d)}catch(e){}},
-  save(){localStorage.setItem('agro',JSON.stringify({piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados}))}
+  _ready:false, _guardando:false,
+  // empaqueta solo los datos (sin funciones) para guardar
+  _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados}},
+  load(){/* la carga real la hace el listener onValue de abajo */},
+  save(){
+    if(!this._ready)return; // no guardar hasta haber cargado lo de la nube
+    this._guardando=true;
+    set(ref(fbDb,RAIZ),this._datos())
+      .catch(e=>console.error('Error guardando en Firebase',e))
+      .finally(()=>{this._guardando=false;});
+  }
 };
 const uid=()=>Math.random().toString(36).slice(2,9);
 const fmt=n=>'$'+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -863,19 +894,65 @@ function pdfCerrado(id){
     compraRowsFmt(o.items),'TOTAL A ABONAR',fmt(o.total));
 }
 
-/* ---------- init ---------- */
-DB.load();seed();
-// normalizar campos nuevos en datos guardados de versiones anteriores
-if(!DB.ordenSeq)DB.ordenSeq=1;
-if(!DB.ordenNro)DB.ordenNro=DB.ordenSeq;
-if(!Array.isArray(DB.cerrados))DB.cerrados=[];
-if(typeof DB.ordenRef!=='string')DB.ordenRef='';
-// recuperar proveedores ya escritos en cotizaciones anteriores
-DB.cots.forEach(c=>{if(c.prov&&!DB.proveedores.some(x=>x.toLowerCase()===c.prov.toLowerCase()))DB.proveedores.push(c.prov)});
-DB.save();
-setTC(DB.tc);refreshFilters();renderPiezas();renderPedido();renderBadge();
-// intento traer el TC automáticamente al abrir (en segundo plano)
-traerTC().then(tc=>{if(tc){setTC(tc);renderCot();renderComp();renderCompra();}});
+/* ---------- init: Firebase en tiempo real ---------- */
+function redibujarTodo(){
+  setTC(DB.tc);
+  refreshFilters();renderPiezas();renderPedido();renderBadge();
+  renderCot();renderComp();renderCompra();
+}
+function normalizar(){
+  if(!Array.isArray(DB.piezas))DB.piezas=[];
+  if(!Array.isArray(DB.pedido))DB.pedido=[];
+  if(!Array.isArray(DB.cots))DB.cots=[];
+  if(!Array.isArray(DB.proveedores))DB.proveedores=[];
+  if(!Array.isArray(DB.cerrados))DB.cerrados=[];
+  if(!DB.tc)DB.tc=1000;
+  if(!DB.ordenSeq)DB.ordenSeq=1;
+  if(!DB.ordenNro)DB.ordenNro=DB.ordenSeq;
+  if(typeof DB.ordenRef!=='string')DB.ordenRef='';
+}
+
+// indicador de conexión
+const connEl=document.getElementById('connStatus');
+function setConn(ok){
+  connEl.className='conn '+(ok?'on':'off');
+  connEl.textContent=ok?'● Conectado':'● Sin conexión';
+}
+
+// escucho los datos en la nube: cualquier cambio (mío o de otro equipo) redibuja
+const raizRef=ref(fbDb,RAIZ);
+onValue(raizRef, snap=>{
+  setConn(true);
+  if(!DB._guardando){ // si el cambio no lo provoqué yo guardando, traigo lo nuevo
+    const d=snap.val()||{};
+    Object.assign(DB,{
+      piezas:d.piezas||[], pedido:d.pedido||[], cots:d.cots||[],
+      proveedores:d.proveedores||[], cerrados:d.cerrados||[],
+      tc:d.tc||DB.tc, ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||(d.ordenSeq||1),
+      ordenRef:typeof d.ordenRef==='string'?d.ordenRef:''
+    });
+    normalizar();
+  }
+  if(!DB._ready){
+    DB._ready=true;
+    // traigo el TC automático al abrir (en segundo plano)
+    traerTC().then(tc=>{if(tc){DB.tc=tc;DB.save();setTC(tc);renderCot();renderComp();renderCompra();}});
+  }
+  redibujarTodo();
+}, err=>{
+  console.error('Firebase:',err);
+  setConn(false);
+});
+
+// detectar desconexión de red del navegador
+window.addEventListener('offline',()=>setConn(false));
+window.addEventListener('online',()=>setConn(true));
+
+// como el script es un módulo, expongo al HTML las funciones usadas en onclick/onchange
+Object.assign(window,{
+  addCot, addPedido, choose, closeModal, delCot, delPedido, delPieza,
+  editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty
+});
 </script>
 </body>
 </html>
