@@ -91,6 +91,9 @@
   .prov-chip b:hover{opacity:1}
   .prov-add{background:var(--panel-2);border:1px dashed var(--line);color:var(--muted);border-radius:14px;padding:2px 9px;font-size:12px;cursor:pointer;font-family:inherit}
   .prov-add:hover{border-color:var(--green);color:var(--green-bright)}
+  .prov-pick{background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:18px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .prov-pick:hover{border-color:var(--green)}
+  .prov-pick.on{background:var(--green);color:#0f1410;border-color:var(--green)}
   .btn.danger{background:transparent;border:1px solid var(--red);color:var(--red);padding:6px 10px;font-size:13px}
   .btn.danger:hover{background:var(--red);color:#fff}
   .btn.sm{padding:6px 11px;font-size:13px}
@@ -354,6 +357,24 @@
   </div>
 </div>
 
+<!-- ===== MODAL SELECCIONAR PROVEEDOR ===== -->
+<div class="modal-bg" id="modalProv">
+  <div class="modal">
+    <h3>Asignar proveedor a la pieza</h3>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:10px">Tocá un proveedor de la lista, o cargá uno nuevo abajo.</p>
+    <div id="provPicker" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+    <div class="field"><label>Nuevo proveedor</label>
+      <div style="display:flex;gap:8px">
+        <input id="provNuevo" placeholder="Nombre del proveedor" style="flex:1">
+        <button class="btn" id="provNuevoBtn">Agregar</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="cerrarModalProv()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase (mismo proyecto que la app de proveedores) -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -562,20 +583,45 @@ function renderPedido(){
     </tr>`;
   }).join('');
 }
-// asignar un proveedor a una pieza del pedido
+// asignar un proveedor a una pieza del pedido (con modal de selección)
+let provPiezaActual=null;
 function asignarProvPedido(piezaId){
   const it=DB.pedido.find(x=>x.piezaId===piezaId);if(!it)return;
   if(!Array.isArray(it.provs))it.provs=[];
-  const conocidos=DB.proveedores.filter(p=>!it.provs.includes(p));
-  let msg='Escribí el nombre del proveedor a asignar';
-  if(conocidos.length)msg+='.\n\nYa tenés: '+conocidos.join(', ');
-  const nombre=prompt(msg,'');
-  if(nombre===null)return;
-  const n=nombre.trim();if(!n)return;
-  if(!it.provs.some(x=>x.toLowerCase()===n.toLowerCase()))it.provs.push(n);
-  if(!DB.proveedores.some(x=>x.toLowerCase()===n.toLowerCase()))DB.proveedores.push(n);
-  DB.save();renderPedido();
+  provPiezaActual=piezaId;
+  document.getElementById('provNuevo').value='';
+  renderProvPicker();
+  document.getElementById('modalProv').classList.add('open');
 }
+function renderProvPicker(){
+  const it=DB.pedido.find(x=>x.piezaId===provPiezaActual);if(!it)return;
+  const cont=document.getElementById('provPicker');
+  const lista=[...DB.proveedores].sort((a,b)=>a.localeCompare(b,'es'));
+  if(!lista.length){cont.innerHTML='<span style="color:var(--muted);font-size:13px">No hay proveedores cargados todavía. Agregá uno abajo.</span>';return;}
+  cont.innerHTML=lista.map(p=>{
+    const ya=it.provs.some(x=>x.toLowerCase()===p.toLowerCase());
+    return `<button class="prov-pick${ya?' on':''}" onclick="togglePickProv('${p.replace(/'/g,"\\'")}')">${ya?'✓ ':''}${p}</button>`;
+  }).join('');
+}
+function togglePickProv(prov){
+  const it=DB.pedido.find(x=>x.piezaId===provPiezaActual);if(!it)return;
+  if(!Array.isArray(it.provs))it.provs=[];
+  if(it.provs.some(x=>x.toLowerCase()===prov.toLowerCase()))
+    it.provs=it.provs.filter(x=>x.toLowerCase()!==prov.toLowerCase());
+  else it.provs.push(prov);
+  DB.save();renderProvPicker();renderPedido();
+}
+document.getElementById('provNuevoBtn').onclick=()=>{
+  const n=document.getElementById('provNuevo').value.trim();if(!n)return;
+  if(!DB.proveedores.some(x=>x.toLowerCase()===n.toLowerCase()))DB.proveedores.push(n);
+  const it=DB.pedido.find(x=>x.piezaId===provPiezaActual);
+  if(it&&!it.provs.some(x=>x.toLowerCase()===n.toLowerCase()))it.provs.push(n);
+  document.getElementById('provNuevo').value='';
+  DB.save();renderProvPicker();renderPedido();
+};
+document.getElementById('provNuevo').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('provNuevoBtn').click();}});
+function cerrarModalProv(){document.getElementById('modalProv').classList.remove('open');provPiezaActual=null;}
+document.getElementById('modalProv').addEventListener('click',e=>{if(e.target.id==='modalProv')cerrarModalProv();});
 function quitarProvPedido(piezaId,prov){
   const it=DB.pedido.find(x=>x.piezaId===piezaId);if(!it||!Array.isArray(it.provs))return;
   it.provs=it.provs.filter(x=>x!==prov);
@@ -699,7 +745,7 @@ function elegidasActuales(){
     const p=DB.piezas.find(x=>x.id===it.piezaId);
     const c=DB.cots.find(x=>x.id===it.chosen);if(!p||!c)return null;
     const u=toArsFinal(c);
-    return{desc:p.desc,codO:p.codO||'',codA:p.codA||'',prov:c.prov,qty:it.qty,u,sub:u*it.qty,
+    return{piezaId:it.piezaId,desc:p.desc,codO:p.codO||'',codA:p.codA||'',prov:c.prov,qty:it.qty,u,sub:u*it.qty,
            precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21'};
   }).filter(Boolean);
 }
@@ -712,6 +758,13 @@ function elegidasFiltradas(){
   const prov=fCompra.value||'';
   const all=elegidasActuales();
   return prov?all.filter(e=>e.prov===prov):all;
+}
+
+// editar cantidad desde la orden de compra (sincroniza con el pedido)
+function setQtyCompra(piezaId,v){
+  const it=DB.pedido.find(x=>x.piezaId===piezaId);if(!it)return;
+  it.qty=Math.max(1,parseInt(v)||1);
+  DB.save();renderCompra();
 }
 
 function renderCompra(){
@@ -732,7 +785,7 @@ function renderCompra(){
   }else{
     tb.innerHTML=elegidas.map(e=>`<tr>
       <td>${e.desc}</td><td class="mono">${e.codO||'—'}</td><td class="mono">${e.codA||'—'}</td>
-      <td>${e.prov}</td><td class="right">${e.qty}</td>
+      <td>${e.prov}</td><td class="right"><input class="qty" type="number" min="1" value="${e.qty}" onchange="setQtyCompra('${e.piezaId}',this.value)"></td>
       <td class="right price">${fmt(e.u)}</td><td class="right price win">${fmt(e.sub)}</td></tr>`).join('');
     const total=elegidas.reduce((s,e)=>s+e.sub,0);
     const provs=uniq(elegidas.map(e=>e.prov));
@@ -1054,7 +1107,8 @@ window.addEventListener('online',()=>setConn(true));
 Object.assign(window,{
   addCot, addPedido, choose, closeModal, delCot, delPedido, delPieza,
   editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty,
-  asignarProvPedido, quitarProvPedido, generarPDFProveedor
+  asignarProvPedido, quitarProvPedido, generarPDFProveedor,
+  togglePickProv, cerrarModalProv, setQtyCompra
 });
 </script>
 </body>
