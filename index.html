@@ -935,14 +935,18 @@ function proveedoresAsignados(){
   DB.pedido.forEach(it=>{if(Array.isArray(it.provs))it.provs.forEach(p=>set.add(p))});
   return [...set].sort((a,b)=>a.localeCompare(b,'es'));
 }
+// data URI del logo (lo tomo del apple-touch-icon ya incrustado en el HTML)
+const LOGO_URI=(document.querySelector('link[rel="apple-touch-icon"]')||{}).href||'';
 function generarPDFProveedor(prov){
   const items=piezasDeProveedor(prov);
   if(!items.length){alert('El proveedor "'+prov+'" no tiene piezas asignadas.');return;}
   const { jsPDF }=window.jspdf;
   const doc=new jsPDF();
   const fecha=new Date().toLocaleDateString('es-AR');
+  // logo del caballito arriba a la derecha
+  if(LOGO_URI){try{doc.addImage(LOGO_URI,'PNG',170,10,26,26);}catch(e){}}
   doc.setFontSize(16);doc.setFont(undefined,'bold');
-  doc.text('Pedido de cotización',14,18);
+  doc.text('El Mestizo — Pedido de cotización',14,18);
   doc.setFontSize(11);doc.setFont(undefined,'normal');
   doc.text('Proveedor: '+prov,14,26);
   if(DB.ordenRef)doc.text('Referencia: '+DB.ordenRef,14,32);
