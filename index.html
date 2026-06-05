@@ -267,11 +267,12 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn amber" id="btnCerrarPedido">🔒 Cerrar pedido</button>
-        <div class="dropdown" id="ddPdf">
-          <button class="btn ghost" id="btnPdfMenu">📄 PDF ▾</button>
-          <div class="dropdown-menu">
-            <button id="btnPdfCompraFull">Completo</button>
-            <button id="btnPdfCompraFilt">Filtrado</button>
+        <div class="dropdown" id="ddPdfCompra">
+          <button class="btn ghost" id="btnPdfCompraMenu">📄 PDF por proveedor ▾</button>
+          <div class="dropdown-menu" id="menuPdfCompra">
+            <button id="btnPdfCompraTodos">Todos (un PDF c/u)</button>
+            <div style="border-top:1px solid var(--line);margin:4px 0"></div>
+            <div id="listaProvPdfCompra" style="max-height:240px;overflow:auto"></div>
           </div>
         </div>
         <div class="dropdown" id="ddCsv">
@@ -713,18 +714,14 @@ function renderComp(){
     let cots=DB.cots.filter(c=>c.piezaId===p.id).map(c=>({...c,ars:toArsFinal(c)}));
     const min=Math.min(...cots.map(c=>c.ars));
     cots.sort((a,b)=>a.ars-b.ars);
-    const asignado=it.chosenList.reduce((s,ch)=>s+(ch.qty||0),0);
-    const resta=it.qty-asignado;
     return `<div class="pieza-cot">
       <div class="pieza-cot-head"><span class="t">${p.desc}</span>
-        <span class="pill cat">${p.cat}</span><span class="pill">Cant: ${it.qty}</span>
-        <span class="pill" style="${resta!==0?'color:var(--amber);border-color:var(--amber)':'color:var(--green-bright);border-color:var(--green)'}">${resta>0?'Falta repartir: '+resta:resta<0?'Te pasaste: '+(-resta):'Repartido ✓'}</span></div>
+        <span class="pill cat">${p.cat}</span><span class="pill">Cant: ${it.qty}</span></div>
       <div style="overflow:auto"><table>
-      <thead><tr><th>Proveedor</th><th class="right">ARS final/u</th><th>Mejor</th><th class="right">Comprar</th><th class="right">Cantidad</th></tr></thead>
+      <thead><tr><th>Proveedor</th><th class="right">ARS final/u</th><th>Mejor</th><th class="right">Comprar</th></tr></thead>
       <tbody>${cots.map(c=>{
         const best=c.ars===min;
-        const ch=it.chosenList.find(x=>x.cotId===c.id);
-        const elegido=!!ch;
+        const elegido=it.chosenList.some(x=>x.cotId===c.id);
         return `<tr class="${best?'best-row':''}">
           <td>${c.prov} ${best?'<span class="tag-best">Mejor precio</span>':''}</td>
           <td class="right price ${best?'win':''}">${fmt(c.ars)}</td>
@@ -734,7 +731,6 @@ function renderComp(){
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f1410" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg>
             </button>
           </td>
-          <td class="right">${elegido?`<input class="qty" type="number" min="1" value="${ch.qty}" onchange="setQtyChosen('${p.id}','${c.id}',this.value)">`:'<span style="color:var(--muted)">—</span>'}</td>
         </tr>`;
       }).join('')}</tbody></table></div>
     </div>`;
@@ -754,12 +750,10 @@ function choose(piezaId,cotId){
   if(idx>=0){
     it.chosenList.splice(idx,1); // destildar
   }else{
-    // al elegir, le asigno lo que falte repartir (o 1 si ya está completo)
-    const asignado=it.chosenList.reduce((s,ch)=>s+(ch.qty||0),0);
-    const resta=Math.max(1,it.qty-asignado);
-    it.chosenList.push({cotId,qty:resta});
+    // al elegir, arranca con la cantidad del pedido (se ajusta en la orden de compra)
+    it.chosenList.push({cotId,qty:it.qty});
   }
-  DB.save();renderComp();
+  DB.save();renderComp();renderCompra();
 }
 function setQtyChosen(piezaId,cotId,v){
   const it=DB.pedido.find(x=>x.piezaId===piezaId);if(!it)return;
@@ -1051,8 +1045,28 @@ function exportarCSVCompra(items,suf){
     ['Pieza','Cód. original','Cód. alternativo','Proveedor','Cantidad','Precio unit. ARS','Subtotal'],
     items.map(e=>[e.desc,e.codO||'',e.codA||'',e.prov,e.qty,e.u,e.sub]));
 }
-document.getElementById('btnPdfCompraFull').onclick=()=>exportarPDFCompra(elegidasActuales(),'');
-document.getElementById('btnPdfCompraFilt').onclick=()=>exportarPDFCompra(elegidasFiltradas(),fCompra.value?' · '+fCompra.value:'');
+// PDF de orden de compra POR PROVEEDOR (con logo, sin precios ni total)
+function compraDeProveedor(prov){
+  return elegidasActuales().filter(e=>e.prov.toLowerCase()===prov.toLowerCase());
+}
+function exportarPDFCompraProv(prov){
+  const items=compraDeProveedor(prov);
+  if(!items.length){alert('El proveedor "'+prov+'" no tiene piezas en la orden.');return;}
+  exportarPDFCompra(items,' · '+prov);
+}
+function exportarPDFCompraTodos(){
+  const provs=uniq(elegidasActuales().map(e=>e.prov));
+  if(!provs.length){alert('No hay piezas elegidas. Elegí proveedores en el Comparativo.');return;}
+  provs.forEach((p,i)=>setTimeout(()=>exportarPDFCompraProv(p),i*400));
+}
+function refreshListaProvPdfCompra(){
+  const cont=document.getElementById('listaProvPdfCompra');
+  const provs=uniq(elegidasActuales().map(e=>e.prov));
+  cont.innerHTML=provs.length
+    ? provs.map(p=>`<button onclick="exportarPDFCompraProv('${p.replace(/'/g,"\\'")}')">📄 ${p}</button>`).join('')
+    : '<div style="padding:8px 12px;color:var(--muted);font-size:12px">Elegí proveedores en el Comparativo primero</div>';
+}
+document.getElementById('btnPdfCompraTodos').onclick=exportarPDFCompraTodos;
 document.getElementById('btnCsvCompraFull').onclick=()=>exportarCSVCompra(elegidasActuales(),'-completa');
 document.getElementById('btnCsvCompraFilt').onclick=()=>exportarCSVCompra(elegidasFiltradas(),fCompra.value?'-'+fCompra.value:'');
 
@@ -1088,21 +1102,20 @@ document.getElementById('btnProvPorProv').onclick=()=>exportarProveedores(true);
 document.getElementById('btnProvTodo').onclick=()=>exportarProveedores(false);
 
 /* ---------- desplegables PDF / CSV / Proveedores ---------- */
-const ddPdf=document.getElementById('ddPdf'),ddCsv=document.getElementById('ddCsv'),ddProv=document.getElementById('ddProv');
+const ddPdfCompra=document.getElementById('ddPdfCompra'),ddCsv=document.getElementById('ddCsv'),ddProv=document.getElementById('ddProv');
 const ddPedidoProv=document.getElementById('ddPedidoProv');
-function closeDropdowns(){ddPdf.classList.remove('open');ddCsv.classList.remove('open');ddProv.classList.remove('open');ddPedidoProv.classList.remove('open')}
-document.getElementById('btnPdfMenu').onclick=e=>{e.stopPropagation();const o=ddPdf.classList.contains('open');closeDropdowns();if(!o)ddPdf.classList.add('open')};
+function closeDropdowns(){ddPdfCompra.classList.remove('open');ddCsv.classList.remove('open');ddProv.classList.remove('open');ddPedidoProv.classList.remove('open')}
+document.getElementById('btnPdfCompraMenu').onclick=e=>{e.stopPropagation();const o=ddPdfCompra.classList.contains('open');closeDropdowns();if(!o){refreshListaProvPdfCompra();ddPdfCompra.classList.add('open');}};
 document.getElementById('btnCsvMenu').onclick=e=>{e.stopPropagation();const o=ddCsv.classList.contains('open');closeDropdowns();if(!o)ddCsv.classList.add('open')};
 document.getElementById('btnProvMenu').onclick=e=>{e.stopPropagation();const o=ddProv.classList.contains('open');closeDropdowns();if(!o)ddProv.classList.add('open')};
 document.getElementById('btnPedidoProvMenu').onclick=e=>{e.stopPropagation();const o=ddPedidoProv.classList.contains('open');closeDropdowns();if(!o){refreshListaProvPdf();ddPedidoProv.classList.add('open');}};
-// cerrar al elegir una opción
-ddPdf.querySelectorAll('.dropdown-menu button').forEach(b=>b.addEventListener('click',closeDropdowns));
+// cerrar al elegir una opción (los menús con lista dinámica se cierran al tocar cualquier botón)
+document.getElementById('menuPdfCompra').addEventListener('click',e=>{if(e.target.tagName==='BUTTON')closeDropdowns();});
 ddCsv.querySelectorAll('.dropdown-menu button').forEach(b=>b.addEventListener('click',closeDropdowns));
 ddProv.querySelectorAll('.dropdown-menu button').forEach(b=>b.addEventListener('click',closeDropdowns));
-// el menú del pedido se cierra al tocar cualquiera de sus botones (incluye los dinámicos)
 document.getElementById('menuPedidoProv').addEventListener('click',e=>{if(e.target.tagName==='BUTTON')closeDropdowns();});
 // cerrar al hacer clic afuera
-document.addEventListener('click',e=>{if(!ddPdf.contains(e.target)&&!ddCsv.contains(e.target)&&!ddProv.contains(e.target)&&!ddPedidoProv.contains(e.target))closeDropdowns()});
+document.addEventListener('click',e=>{if(!ddPdfCompra.contains(e.target)&&!ddCsv.contains(e.target)&&!ddProv.contains(e.target)&&!ddPedidoProv.contains(e.target))closeDropdowns()});
 function pdfCerrado(id){
   const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
   abrirImpresion('Orden de compra '+ordenCod(o.nro),o.ref+' · '+o.fecha,
@@ -1170,7 +1183,7 @@ Object.assign(window,{
   addCot, addPedido, choose, closeModal, delCot, delPedido, delPieza,
   editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty,
   asignarProvPedido, quitarProvPedido, generarPDFProveedor,
-  togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen
+  togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen, exportarPDFCompraProv
 });
 </script>
 </body>
