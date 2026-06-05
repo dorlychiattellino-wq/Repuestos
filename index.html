@@ -708,46 +708,82 @@ function renderComp(){
   const piezasConCot=DB.pedido.filter(it=>DB.cots.some(c=>c.piezaId===it.piezaId));
   if(!piezasConCot.length){cont.innerHTML=`<div class="empty">Todavía no hay cotizaciones cargadas para comparar.</div>`;return}
   cont.innerHTML=piezasConCot.map(it=>{
+    migrarChosen(it);
     const p=DB.piezas.find(x=>x.id===it.piezaId);
-    let cots=DB.cots.filter(c=>c.piezaId===p.id).map(c=>({...c,ars:toArsFinal(c),total:toArsFinal(c)*it.qty}));
+    let cots=DB.cots.filter(c=>c.piezaId===p.id).map(c=>({...c,ars:toArsFinal(c)}));
     const min=Math.min(...cots.map(c=>c.ars));
     cots.sort((a,b)=>a.ars-b.ars);
+    const asignado=it.chosenList.reduce((s,ch)=>s+(ch.qty||0),0);
+    const resta=it.qty-asignado;
     return `<div class="pieza-cot">
       <div class="pieza-cot-head"><span class="t">${p.desc}</span>
-        <span class="pill cat">${p.cat}</span><span class="pill">Cant: ${it.qty}</span></div>
+        <span class="pill cat">${p.cat}</span><span class="pill">Cant: ${it.qty}</span>
+        <span class="pill" style="${resta!==0?'color:var(--amber);border-color:var(--amber)':'color:var(--green-bright);border-color:var(--green)'}">${resta>0?'Falta repartir: '+resta:resta<0?'Te pasaste: '+(-resta):'Repartido ✓'}</span></div>
       <div style="overflow:auto"><table>
-      <thead><tr><th>Proveedor</th><th class="right">ARS final/u</th><th class="right">Total (×${it.qty})</th><th>Mejor</th><th class="right">Elegir</th></tr></thead>
+      <thead><tr><th>Proveedor</th><th class="right">ARS final/u</th><th>Mejor</th><th class="right">Comprar</th><th class="right">Cantidad</th></tr></thead>
       <tbody>${cots.map(c=>{
-        const best=c.ars===min, chosen=isChosen(p.id,c.id);
+        const best=c.ars===min;
+        const ch=it.chosenList.find(x=>x.cotId===c.id);
+        const elegido=!!ch;
         return `<tr class="${best?'best-row':''}">
           <td>${c.prov} ${best?'<span class="tag-best">Mejor precio</span>':''}</td>
           <td class="right price ${best?'win':''}">${fmt(c.ars)}</td>
-          <td class="right price ${best?'win':''}">${fmt(c.total)}</td>
           <td>${best?'✅':'—'}</td>
           <td class="right">
-            <button class="chk ${chosen?'on':''}" onclick="choose('${p.id}','${c.id}')" title="Elegir para comprar">
+            <button class="chk ${elegido?'on':''}" onclick="choose('${p.id}','${c.id}')" title="Comprar a este proveedor">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f1410" stroke-width="3"><path d="M5 12l5 5L20 7"/></svg>
             </button>
-          </td></tr>`;
+          </td>
+          <td class="right">${elegido?`<input class="qty" type="number" min="1" value="${ch.qty}" onchange="setQtyChosen('${p.id}','${c.id}',this.value)">`:'<span style="color:var(--muted)">—</span>'}</td>
+        </tr>`;
       }).join('')}</tbody></table></div>
     </div>`;
   }).join('');
 }
-function isChosen(piezaId,cotId){const it=DB.pedido.find(x=>x.piezaId===piezaId);return it&&it.chosen===cotId}
+// convierte el formato viejo (it.chosen = cotId) al nuevo (it.chosenList = [{cotId, qty}])
+function migrarChosen(it){
+  if(!Array.isArray(it.chosenList)){
+    it.chosenList = it.chosen ? [{cotId:it.chosen, qty:it.qty}] : [];
+    delete it.chosen;
+  }
+}
 function choose(piezaId,cotId){
-  const it=DB.pedido.find(x=>x.piezaId===piezaId);
-  it.chosen=(it.chosen===cotId)?null:cotId;DB.save();renderComp();
+  const it=DB.pedido.find(x=>x.piezaId===piezaId);if(!it)return;
+  migrarChosen(it);
+  const idx=it.chosenList.findIndex(x=>x.cotId===cotId);
+  if(idx>=0){
+    it.chosenList.splice(idx,1); // destildar
+  }else{
+    // al elegir, le asigno lo que falte repartir (o 1 si ya está completo)
+    const asignado=it.chosenList.reduce((s,ch)=>s+(ch.qty||0),0);
+    const resta=Math.max(1,it.qty-asignado);
+    it.chosenList.push({cotId,qty:resta});
+  }
+  DB.save();renderComp();
+}
+function setQtyChosen(piezaId,cotId,v){
+  const it=DB.pedido.find(x=>x.piezaId===piezaId);if(!it)return;
+  migrarChosen(it);
+  const ch=it.chosenList.find(x=>x.cotId===cotId);if(!ch)return;
+  ch.qty=Math.max(1,parseInt(v)||1);
+  DB.save();renderComp();
 }
 
 /* ---------- compra ---------- */
 function elegidasActuales(){
-  return DB.pedido.filter(it=>it.chosen).map(it=>{
-    const p=DB.piezas.find(x=>x.id===it.piezaId);
-    const c=DB.cots.find(x=>x.id===it.chosen);if(!p||!c)return null;
-    const u=toArsFinal(c);
-    return{piezaId:it.piezaId,desc:p.desc,codO:p.codO||'',codA:p.codA||'',prov:c.prov,qty:it.qty,u,sub:u*it.qty,
-           precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21'};
-  }).filter(Boolean);
+  const out=[];
+  DB.pedido.forEach(it=>{
+    migrarChosen(it);
+    const p=DB.piezas.find(x=>x.id===it.piezaId);if(!p)return;
+    it.chosenList.forEach(ch=>{
+      const c=DB.cots.find(x=>x.id===ch.cotId);if(!c)return;
+      const u=toArsFinal(c);const q=ch.qty||0;
+      out.push({piezaId:it.piezaId,cotId:c.id,desc:p.desc,codO:p.codO||'',codA:p.codA||'',cat:p.cat||'',
+        prov:c.prov,qty:q,u,sub:u*q,
+        precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21'});
+    });
+  });
+  return out;
 }
 const fCompra=document.getElementById('fCompra');
 fCompra.onchange=renderCompra;
@@ -760,10 +796,12 @@ function elegidasFiltradas(){
   return prov?all.filter(e=>e.prov===prov):all;
 }
 
-// editar cantidad desde la orden de compra (sincroniza con el pedido)
-function setQtyCompra(piezaId,v){
+// editar cantidad desde la orden de compra (cantidad por proveedor elegido)
+function setQtyCompra(piezaId,cotId,v){
   const it=DB.pedido.find(x=>x.piezaId===piezaId);if(!it)return;
-  it.qty=Math.max(1,parseInt(v)||1);
+  migrarChosen(it);
+  const ch=it.chosenList.find(x=>x.cotId===cotId);if(!ch)return;
+  ch.qty=Math.max(1,parseInt(v)||1);
   DB.save();renderCompra();
 }
 
@@ -785,7 +823,7 @@ function renderCompra(){
   }else{
     tb.innerHTML=elegidas.map(e=>`<tr>
       <td>${e.desc}</td><td class="mono">${e.codO||'—'}</td><td class="mono">${e.codA||'—'}</td>
-      <td>${e.prov}</td><td class="right"><input class="qty" type="number" min="1" value="${e.qty}" onchange="setQtyCompra('${e.piezaId}',this.value)"></td>
+      <td>${e.prov}</td><td class="right"><input class="qty" type="number" min="1" value="${e.qty}" onchange="setQtyCompra('${e.piezaId}','${e.cotId}',this.value)"></td>
       <td class="right price">${fmt(e.u)}</td><td class="right price win">${fmt(e.sub)}</td></tr>`).join('');
     const total=elegidas.reduce((s,e)=>s+e.sub,0);
     const provs=uniq(elegidas.map(e=>e.prov));
@@ -844,7 +882,7 @@ function reabrirCerrado(id){
     if(!p){p={id:uid(),marca:'',impl:'',cat:'',desc:it.desc,codO:it.codO,codA:it.codA};DB.piezas.push(p);}
     const cId=uid();
     DB.cots.push({id:cId,piezaId:p.id,prov:it.prov,precio:it.u,moneda:'ARS',iva:'final',alic:'21'});
-    DB.pedido.push({piezaId:p.id,qty:it.qty,chosen:cId});
+    DB.pedido.push({piezaId:p.id,qty:it.qty,provs:[it.prov],chosenList:[{cotId:cId,qty:it.qty}]});
   });
   DB.ordenNro=o.nro; DB.ordenRef=o.ref;
   DB.cerrados=DB.cerrados.filter(x=>x.id!==id);
@@ -983,9 +1021,29 @@ const HEAD_COMPRA=['Pieza','Cód. original','Cód. alternativo','Proveedor','Can
 
 function exportarPDFCompra(items,suf){
   if(!items.length){alert('No hay piezas para exportar.');return}
-  const total=items.reduce((s,e)=>s+e.sub,0);
-  abrirImpresion('Orden de compra '+ordenCod(DB.ordenNro),(DB.ordenRef||'')+(suf||''),
-    HEAD_COMPRA,compraRowsFmt(items),'TOTAL A ABONAR',fmt(total));
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF();
+  const fecha=new Date().toLocaleDateString('es-AR');
+  if(LOGO_URI){try{doc.addImage(LOGO_URI,'PNG',170,10,26,26);}catch(e){}}
+  doc.setFontSize(16);doc.setFont(undefined,'bold');
+  doc.text('El Mestizo — Orden de compra',14,18);
+  doc.setFontSize(11);doc.setFont(undefined,'normal');
+  doc.text('Orden Nº: '+ordenCod(DB.ordenNro),14,26);
+  let y=32;
+  if(DB.ordenRef){doc.text('Referencia: '+DB.ordenRef,14,y);y+=6;}
+  if(suf&&suf.trim()){doc.text('Proveedor: '+suf.replace(/^[ ·-]+/,''),14,y);y+=6;}
+  doc.text('Fecha: '+fecha,14,y);y+=6;
+  doc.autoTable({
+    startY:y+2,
+    head:[['Categoría','Pieza','Cód. original','Cód. alternativo','Proveedor','Cant.']],
+    body:items.map(e=>[e.cat||'',e.desc,e.codO||'',e.codA||'',e.prov,String(e.qty)]),
+    styles:{fontSize:9,cellPadding:2.5},
+    headStyles:{fillColor:[46,125,50],textColor:255},
+    alternateRowStyles:{fillColor:[245,247,244]},
+    margin:{left:14,right:14}
+  });
+  const sufN=(suf&&suf.trim())?'-'+suf.replace(/[^\w\-]+/g,'_'):'';
+  doc.save('orden-'+ordenCod(DB.ordenNro)+sufN+'.pdf');
 }
 function exportarCSVCompra(items,suf){
   if(!items.length){alert('No hay piezas para exportar.');return}
@@ -1068,7 +1126,7 @@ function normalizar(){
   if(!DB.ordenSeq)DB.ordenSeq=1;
   if(!DB.ordenNro)DB.ordenNro=DB.ordenSeq;
   if(typeof DB.ordenRef!=='string')DB.ordenRef='';
-  DB.pedido.forEach(it=>{if(!Array.isArray(it.provs))it.provs=[];});
+  DB.pedido.forEach(it=>{if(!Array.isArray(it.provs))it.provs=[];migrarChosen(it);});
 }
 
 // indicador de conexión
@@ -1112,7 +1170,7 @@ Object.assign(window,{
   addCot, addPedido, choose, closeModal, delCot, delPedido, delPieza,
   editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty,
   asignarProvPedido, quitarProvPedido, generarPDFProveedor,
-  togglePickProv, cerrarModalProv, setQtyCompra
+  togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen
 });
 </script>
 </body>
