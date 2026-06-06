@@ -1196,13 +1196,14 @@ function ivaProveedores(e){
   return e.alic==='105'?'10.5':'21';
 }
 // columnas pensadas para que el importador de la app de Proveedores las lea directo
-const HEAD_PROV=['proveedor','fecha','descripcion','moneda','tipoIva','item_desc','item_codigo','cantidad','precio_unit','validez','observaciones'];
+const HEAD_PROV=['proveedor','fecha','descripcion','moneda','tipoIva','item_desc','item_codigo','cantidad','precio_unit','validez','observaciones','descuento'];
 function filaProv(e,fecha,descPpto){
   const dto=Number(e.dto)||0;
-  const obs=dto?('Dto '+dto+'% (precio lista '+Number(e.precio).toLocaleString('es-AR')+')'):'';
-  // precio unitario con el descuento ya aplicado, en la moneda original
-  const precioConDto=Number(e.precio)*(1-dto/100);
-  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),e.desc,e.codO||'',e.qty,precioConDto,Number(e.dias)||'',obs];
+  const obs=dto?('Descuento '+dto+'% aplicado - Lista: '+e.moneda+' '+Number(e.precio).toLocaleString('es-AR')):'';
+  // se manda el PRECIO DE LISTA (sin descuento); el descuento lo aplica la app de Proveedores
+  const precioLista=Number(e.precio);
+  const dtoPct=dto; // para que Proveedores sepa cuánto descontar
+  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),e.desc,e.codO||'',e.qty,precioLista,Number(e.dias)||'',obs,dtoPct];
 }
 function exportarProveedores(porProveedor){
   const items=elegidasActuales();
