@@ -337,6 +337,10 @@
         <tbody></tbody>
       </table>
     </div>
+
+    <div style="margin-top:30px;padding-top:16px;border-top:1px solid var(--line);text-align:right">
+      <button class="btn danger sm" id="btnReiniciarTodo" title="Borra TODO y arranca de cero">🗑 Reiniciar todo (borrar datos de prueba)</button>
+    </div>
   </section>
 
 </main>
@@ -1255,6 +1259,18 @@ function csvCerradosPendientes(){
   DB.save();renderCerrados();
 }
 document.getElementById('btnCsvCerradosPend').onclick=csvCerradosPendientes;
+
+/* ---------- reiniciar todo (borrar datos de prueba) ---------- */
+document.getElementById('btnReiniciarTodo').onclick=()=>{
+  if(!confirm('⚠ ATENCIÓN: esto borra TODO (catálogo, pedido, cotizaciones, proveedores y pedidos cerrados) y reinicia las órdenes a OC-0001.\n\nSe borra para TODO el equipo. ¿Seguro?'))return;
+  if(!confirm('Última confirmación: ¿Borrar todo y arrancar de cero? Esta acción no se puede deshacer.'))return;
+  DB.piezas=[]; DB.pedido=[]; DB.cots=[]; DB.proveedores=[]; DB.cerrados=[];
+  DB.ordenSeq=1; DB.ordenNro=1; DB.ordenRef='';
+  ordenExportadaProv=false;
+  DB.save();
+  refreshFilters();renderPiezas();renderPedido();renderBadge();renderCot();renderComp();renderCompra();
+  alert('✅ Todo reiniciado. La próxima orden será OC-0001.');
+};
 
 /* ---------- desplegables PDF / CSV / Proveedores ---------- */
 const ddPdfCompra=document.getElementById('ddPdfCompra'),ddCsv=document.getElementById('ddCsv'),ddProv=document.getElementById('ddProv');
