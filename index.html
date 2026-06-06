@@ -1235,12 +1235,20 @@ function csvCerradoProv(id){
   o.pasadoProv=true;
   DB.save();renderCerrados();
 }
-// genera el CSV de TODAS las cerradas que todavía no se pasaron a proveedores
+// genera UN SOLO CSV con todas las cerradas que todavía no se pasaron a proveedores
 function csvCerradosPendientes(){
   const pend=DB.cerrados.filter(o=>!o.pasadoProv);
   if(!pend.length){alert('No hay órdenes cerradas pendientes de pasar a Proveedores.');return}
-  if(!confirm('Se generará un CSV por cada orden cerrada pendiente ('+pend.length+'). ¿Continuar?'))return;
-  pend.forEach((o,i)=>setTimeout(()=>csvCerradoProv(o.id),i*400));
+  if(!confirm('Se generará UN solo archivo CSV con todas las órdenes pendientes ('+pend.length+'). ¿Continuar?'))return;
+  const fecha=new Date().toISOString().slice(0,10);
+  const filas=[];
+  pend.forEach(o=>{
+    const descPpto=o.ref||('Orden '+ordenCod(o.nro));
+    o.items.forEach(e=>filas.push(filaProv(e,fecha,descPpto)));
+    o.pasadoProv=true; // marcar cada una como pasada
+  });
+  descargarCSV('proveedores-pendientes-'+fecha,HEAD_PROV,filas);
+  DB.save();renderCerrados();
 }
 document.getElementById('btnCsvCerradosPend').onclick=csvCerradosPendientes;
 
