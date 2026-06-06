@@ -321,9 +321,14 @@
     </div></div>
 
     <!-- ===== PEDIDOS CERRADOS ===== -->
-    <h2 style="margin-top:34px">Pedidos cerrados</h2>
-    <p class="sub">Historial de órdenes finalizadas. Podés reabrirlas, editar la referencia o eliminarlas.</p>
-    <div class="card" style="padding:0;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:34px">
+      <div>
+        <h2>Pedidos cerrados</h2>
+        <p class="sub" style="margin-bottom:0">Una orden por proveedor. Reabrir, generar CSV, marcar recibido/pasado o eliminar.</p>
+      </div>
+      <button class="btn ghost" id="btnCsvCerradosPend" title="Generar CSV de todas las pendientes">📥 CSV pendientes a Proveedores</button>
+    </div>
+    <div class="card" style="padding:0;overflow:auto;margin-top:14px">
       <table id="tblCerrados">
         <thead><tr>
           <th>Orden Nº</th><th>Proveedor / Referencia</th><th>Fecha</th><th class="right">Piezas</th>
@@ -963,6 +968,7 @@ function renderCerrados(){
     <td class="right" style="white-space:nowrap">
       <button class="btn ghost sm" onclick="toggleRecibido('${o.id}')" title="Marcar recibido / sin recibir">📦</button>
       <button class="btn ghost sm" onclick="togglePasadoProv('${o.id}')" title="Marcar pasado a Proveedores / no">📤</button>
+      <button class="btn ghost sm" onclick="csvCerradoProv('${o.id}')" title="CSV para Proveedores">📥</button>
       <button class="btn sm" onclick="reabrirCerrado('${o.id}')" title="Reabrir">↩</button>
       <button class="btn ghost sm" onclick="editarCerrado('${o.id}')" title="Editar referencia">✎</button>
       <button class="btn ghost sm" onclick="pdfCerrado('${o.id}')" title="PDF">📄</button>
@@ -1217,6 +1223,27 @@ let ordenExportadaProv=false;
 document.getElementById('btnProvPorProv').onclick=()=>exportarProveedores(true);
 document.getElementById('btnProvTodo').onclick=()=>exportarProveedores(false);
 
+// genera el CSV de proveedores de UNA orden cerrada (que ya es de un solo proveedor)
+function csvCerradoProv(id){
+  const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
+  const fecha=new Date().toISOString().slice(0,10);
+  const descPpto=o.ref||('Orden '+ordenCod(o.nro));
+  const filas=o.items.map(e=>filaProv(e,fecha,descPpto));
+  const nombreProv=(o.proveedor||'proveedor').replace(/[^\w\-]+/g,'_');
+  descargarCSV('proveedor-'+nombreProv+'-'+ordenCod(o.nro),HEAD_PROV,filas);
+  // marcar como pasado a proveedores
+  o.pasadoProv=true;
+  DB.save();renderCerrados();
+}
+// genera el CSV de TODAS las cerradas que todavía no se pasaron a proveedores
+function csvCerradosPendientes(){
+  const pend=DB.cerrados.filter(o=>!o.pasadoProv);
+  if(!pend.length){alert('No hay órdenes cerradas pendientes de pasar a Proveedores.');return}
+  if(!confirm('Se generará un CSV por cada orden cerrada pendiente ('+pend.length+'). ¿Continuar?'))return;
+  pend.forEach((o,i)=>setTimeout(()=>csvCerradoProv(o.id),i*400));
+}
+document.getElementById('btnCsvCerradosPend').onclick=csvCerradosPendientes;
+
 /* ---------- desplegables PDF / CSV / Proveedores ---------- */
 const ddPdfCompra=document.getElementById('ddPdfCompra'),ddCsv=document.getElementById('ddCsv'),ddProv=document.getElementById('ddProv');
 const ddPedidoProv=document.getElementById('ddPedidoProv');
@@ -1349,7 +1376,7 @@ Object.assign(window,{
   editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty,
   asignarProvPedido, quitarProvPedido, generarPDFProveedor,
   togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen, exportarPDFCompraProv,
-  editarCot, cerrarModalCot, toggleRecibido, togglePasadoProv
+  editarCot, cerrarModalCot, toggleRecibido, togglePasadoProv, csvCerradoProv
 });
 </script>
 </body>
