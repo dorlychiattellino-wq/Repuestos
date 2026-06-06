@@ -1140,6 +1140,33 @@ function normalizar(){
   if(!DB.ordenNro)DB.ordenNro=DB.ordenSeq;
   if(typeof DB.ordenRef!=='string')DB.ordenRef='';
   DB.pedido.forEach(it=>{if(!Array.isArray(it.provs))it.provs=[];migrarChosen(it);});
+  dedupPedido();
+}
+// fusiona filas repetidas de la misma pieza en una sola (junta proveedores y elecciones)
+function dedupPedido(){
+  const porPieza={};
+  const resultado=[];
+  DB.pedido.forEach(it=>{
+    if(!porPieza[it.piezaId]){
+      porPieza[it.piezaId]=it;
+      resultado.push(it);
+    }else{
+      // ya existe esa pieza: fusiono dentro de la primera
+      const base=porPieza[it.piezaId];
+      // unir proveedores sin repetir
+      (it.provs||[]).forEach(pr=>{
+        if(!base.provs.some(x=>x.toLowerCase()===pr.toLowerCase()))base.provs.push(pr);
+      });
+      // unir elecciones sin repetir cotId
+      migrarChosen(base);migrarChosen(it);
+      (it.chosenList||[]).forEach(ch=>{
+        if(!base.chosenList.some(x=>x.cotId===ch.cotId))base.chosenList.push(ch);
+      });
+      // me quedo con la mayor cantidad pedida
+      base.qty=Math.max(base.qty||1,it.qty||1);
+    }
+  });
+  DB.pedido=resultado;
 }
 
 // indicador de conexión
@@ -1161,7 +1188,10 @@ onValue(raizRef, snap=>{
       tc:d.tc||DB.tc, ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||(d.ordenSeq||1),
       ordenRef:typeof d.ordenRef==='string'?d.ordenRef:''
     });
+    const antes=DB.pedido.length;
     normalizar();
+    // si el saneo eliminó duplicados, guardo la versión limpia
+    if(DB.pedido.length!==antes)DB.save();
   }
   if(!DB._ready){
     DB._ready=true;
