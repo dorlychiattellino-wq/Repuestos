@@ -1198,8 +1198,11 @@ function ivaProveedores(e){
 // columnas pensadas para que el importador de la app de Proveedores las lea directo
 const HEAD_PROV=['proveedor','fecha','descripcion','moneda','tipoIva','item_desc','item_codigo','cantidad','precio_unit','validez','observaciones'];
 function filaProv(e,fecha,descPpto){
-  const obs=Number(e.dto)?('Dto '+e.dto+'%'):'';
-  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),e.desc,e.codO||'',e.qty,e.precio,Number(e.dias)||'',obs];
+  const dto=Number(e.dto)||0;
+  const obs=dto?('Dto '+dto+'% (precio lista '+Number(e.precio).toLocaleString('es-AR')+')'):'';
+  // precio unitario con el descuento ya aplicado, en la moneda original
+  const precioConDto=Number(e.precio)*(1-dto/100);
+  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),e.desc,e.codO||'',e.qty,precioConDto,Number(e.dias)||'',obs];
 }
 function exportarProveedores(porProveedor){
   const items=elegidasActuales();
