@@ -580,7 +580,7 @@ function renderPedido(){
       <td class="mono">${p.codA||'—'}</td>
       <td><div class="prov-chips">${chips}<button class="prov-add" onclick="asignarProvPedido('${it.piezaId}')">+ asignar</button></div></td>
       <td class="right"><input class="qty" type="number" min="1" value="${it.qty}" onchange="setQty('${it.piezaId}',this.value)"></td>
-      <td class="right"><button class="btn danger sm" onclick="delPedido('${it.piezaId}')">✕</button></td>
+      <td class="right" style="white-space:nowrap"><button class="btn ghost sm" onclick="editPieza('${it.piezaId}')" title="Editar pieza">✎</button> <button class="btn danger sm" onclick="delPedido('${it.piezaId}')">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -635,11 +635,18 @@ document.getElementById('btnIrCotizar').onclick=()=>{if(!DB.pedido.length){alert
 
 /* ---------- cotizaciones ---------- */
 // convierte cualquier cotización a ARS FINAL por unidad
-function toArsFinal(c){
+// precio ARS final SIN descuento (precio + moneda + IVA)
+function toArsBruto(c){
   let base=Number(c.precio)||0;
   if(c.moneda==='USD')base=base*DB.tc;
   if(c.iva==='mas'){const al=c.alic==='105'?1.105:1.21;base=base*al;}
-  return base; // ya es final por unidad
+  return base;
+}
+// precio ARS final CON descuento aplicado (lo que se usa para comparar y comprar)
+function toArsFinal(c){
+  const bruto=toArsBruto(c);
+  const dto=Number(c.dto)||0;
+  return bruto*(1-dto/100);
 }
 function refreshProv(){
   const dl=document.getElementById('dlProv');
@@ -660,7 +667,7 @@ function renderCot(){
         <span style="margin-left:auto" class="pill">Cant: ${it.qty}</span>
       </div>
       <div style="overflow:auto">
-      <table><thead><tr><th>Proveedor</th><th>Precio</th><th>Moneda</th><th>IVA</th><th>Alíc.</th><th class="right">ARS final/u</th><th></th></tr></thead>
+      <table><thead><tr><th>Proveedor</th><th>Precio</th><th>Moneda</th><th>IVA</th><th>Alíc.</th><th>Dto</th><th>Pago</th><th class="right">ARS final/u</th><th></th></tr></thead>
       <tbody>
       ${cots.length?cots.map(c=>`<tr>
         <td>${c.prov}</td>
@@ -668,20 +675,24 @@ function renderCot(){
         <td><span class="flag ${c.moneda==='USD'?'usd':'ars'}">${c.moneda}</span></td>
         <td>${c.iva==='mas'?'+ IVA':'final'}</td>
         <td>${c.iva==='mas'?(c.alic==='105'?'10,5%':'21%'):'—'}</td>
-        <td class="right price">${fmt(toArsFinal(c))}</td>
+        <td>${Number(c.dto)?Number(c.dto)+'%':'—'}</td>
+        <td>${Number(c.dias)?Number(c.dias)+' d':'—'}</td>
+        <td class="right price">${fmt(toArsFinal(c))}${Number(c.dto)?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${fmt(toArsBruto(c))}</span>`:''}</td>
         <td class="right"><button class="btn danger sm" onclick="delCot('${c.id}')">✕</button></td>
-      </tr>`).join(''):`<tr><td colspan="7" style="color:var(--muted)">Sin cotizaciones cargadas.</td></tr>`}
+      </tr>`).join(''):`<tr><td colspan="9" style="color:var(--muted)">Sin cotizaciones cargadas.</td></tr>`}
       </tbody></table></div>
       <div class="add-cot">
         <div class="toolbar" style="margin:0;align-items:flex-end">
           <div class="field" style="flex:2;min-width:140px"><label>Proveedor</label><input id="cp-prov-${p.id}" placeholder="Nombre proveedor" list="dlProv" autocomplete="off"></div>
-          <div class="field"><label>Precio</label><input id="cp-precio-${p.id}" type="number" step="0.01" placeholder="0.00" style="width:110px"></div>
+          <div class="field"><label>Precio</label><input id="cp-precio-${p.id}" type="number" step="0.01" placeholder="0.00" style="width:100px"></div>
           <div class="field"><label>Moneda</label>
             <select id="cp-moneda-${p.id}" class="mini"><option value="ARS">$ Pesos</option><option value="USD">U$D Dólar</option></select></div>
           <div class="field"><label>IVA</label>
             <select id="cp-iva-${p.id}" class="mini"><option value="final">IVA final</option><option value="mas">+ IVA</option></select></div>
           <div class="field"><label>Alícuota</label>
             <select id="cp-alic-${p.id}" class="mini"><option value="21">21%</option><option value="105">10,5%</option></select></div>
+          <div class="field"><label>Dto %</label><input id="cp-dto-${p.id}" type="number" step="0.01" placeholder="0" style="width:70px"></div>
+          <div class="field"><label>Pago (días)</label><input id="cp-dias-${p.id}" type="number" placeholder="0" style="width:80px"></div>
           <button class="btn sm" onclick="addCot('${p.id}')">+ Agregar cotización</button>
         </div>
       </div>
@@ -696,7 +707,9 @@ function addCot(piezaId){
   DB.cots.push({id:uid(),piezaId,prov,precio:Number(precio),
     moneda:document.getElementById('cp-moneda-'+piezaId).value,
     iva:document.getElementById('cp-iva-'+piezaId).value,
-    alic:document.getElementById('cp-alic-'+piezaId).value});
+    alic:document.getElementById('cp-alic-'+piezaId).value,
+    dto:Number(document.getElementById('cp-dto-'+piezaId).value)||0,
+    dias:Number(document.getElementById('cp-dias-'+piezaId).value)||0});
   DB.save();renderCot();
 }
 function delCot(id){const c=DB.cots.find(x=>x.id===id);DB.cots=DB.cots.filter(x=>x.id!==id);
@@ -718,13 +731,16 @@ function renderComp(){
       <div class="pieza-cot-head"><span class="t">${p.desc}</span>
         <span class="pill cat">${p.cat}</span><span class="pill">Cant: ${it.qty}</span></div>
       <div style="overflow:auto"><table>
-      <thead><tr><th>Proveedor</th><th class="right">ARS final/u</th><th>Mejor</th><th class="right">Comprar</th></tr></thead>
+      <thead><tr><th>Proveedor</th><th class="right">ARS final/u</th><th>Dto</th><th>Pago</th><th>Mejor</th><th class="right">Comprar</th></tr></thead>
       <tbody>${cots.map(c=>{
         const best=c.ars===min;
         const elegido=it.chosenList.some(x=>x.cotId===c.id);
+        const tieneDto=Number(c.dto)>0;
         return `<tr class="${best?'best-row':''}">
           <td>${c.prov} ${best?'<span class="tag-best">Mejor precio</span>':''}</td>
-          <td class="right price ${best?'win':''}">${fmt(c.ars)}</td>
+          <td class="right price ${best?'win':''}">${fmt(c.ars)}${tieneDto?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${fmt(toArsBruto(c))}</span>`:''}</td>
+          <td>${tieneDto?Number(c.dto)+'%':'—'}</td>
+          <td>${Number(c.dias)?Number(c.dias)+' d':'—'}</td>
           <td>${best?'✅':'—'}</td>
           <td class="right">
             <button class="chk ${elegido?'on':''}" onclick="choose('${p.id}','${c.id}')" title="Comprar a este proveedor">
@@ -774,7 +790,8 @@ function elegidasActuales(){
       const u=toArsFinal(c);const q=ch.qty||0;
       out.push({piezaId:it.piezaId,cotId:c.id,desc:p.desc,codO:p.codO||'',codA:p.codA||'',cat:p.cat||'',
         prov:c.prov,qty:q,u,sub:u*q,
-        precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21'});
+        precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21',
+        dto:Number(c.dto)||0,dias:Number(c.dias)||0});
     });
   });
   return out;
@@ -1077,9 +1094,10 @@ function ivaProveedores(e){
   return e.alic==='105'?'10.5':'21';
 }
 // columnas pensadas para que el importador de la app de Proveedores las lea directo
-const HEAD_PROV=['proveedor','fecha','descripcion','moneda','tipoIva','item_desc','item_codigo','cantidad','precio_unit'];
+const HEAD_PROV=['proveedor','fecha','descripcion','moneda','tipoIva','item_desc','item_codigo','cantidad','precio_unit','validez','observaciones'];
 function filaProv(e,fecha,descPpto){
-  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),e.desc,e.codO||'',e.qty,e.precio];
+  const obs=Number(e.dto)?('Dto '+e.dto+'%'):'';
+  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),e.desc,e.codO||'',e.qty,e.precio,Number(e.dias)||'',obs];
 }
 function exportarProveedores(porProveedor){
   const items=elegidasActuales();
