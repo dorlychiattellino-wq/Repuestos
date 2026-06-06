@@ -326,7 +326,7 @@
     <div class="card" style="padding:0;overflow:auto">
       <table id="tblCerrados">
         <thead><tr>
-          <th>Orden Nº</th><th>Referencia</th><th>Fecha</th><th class="right">Piezas</th>
+          <th>Orden Nº</th><th>Proveedor / Referencia</th><th>Fecha</th><th class="right">Piezas</th>
           <th class="right">Total (ARS)</th><th class="right">Acciones</th>
         </tr></thead>
         <tbody></tbody>
@@ -914,20 +914,27 @@ function renderCompra(){
 document.getElementById('btnCerrarPedido').onclick=()=>{
   const elegidas=elegidasActuales();
   if(!elegidas.length){alert('No hay piezas elegidas para cerrar el pedido.');return}
-  if(!confirm('¿Cerrar este pedido? Se guardará en el historial y empezás uno nuevo.'))return;
-  const total=elegidas.reduce((s,e)=>s+e.sub,0);
-  DB.cerrados.unshift({
-    id:uid(), nro:DB.ordenNro, ref:DB.ordenRef||'(sin referencia)',
-    fecha:new Date().toLocaleDateString('es-AR'), tc:DB.tc,
-    items:elegidas, total, recibido:false, pasadoProv:ordenExportadaProv
+  const provs=uniq(elegidas.map(e=>e.prov));
+  if(!confirm('¿Cerrar este pedido? Se va a crear una orden de compra por cada proveedor ('+provs.length+'). Cada una queda independiente en el historial.'))return;
+  const fecha=new Date().toLocaleDateString('es-AR');
+  const ref=DB.ordenRef||'(sin referencia)';
+  // crear una orden cerrada por cada proveedor, con su propio número
+  provs.forEach(prov=>{
+    const items=elegidas.filter(e=>e.prov===prov);
+    const total=items.reduce((s,e)=>s+e.sub,0);
+    DB.cerrados.unshift({
+      id:uid(), nro:DB.ordenNro, ref, proveedor:prov,
+      fecha, tc:DB.tc, items, total,
+      recibido:false, pasadoProv:ordenExportadaProv
+    });
+    DB.ordenNro=++DB.ordenSeq; // siguiente número para el próximo proveedor
   });
-  ordenExportadaProv=false; // reset para la próxima orden
-  // arrancar pedido nuevo
-  DB.ordenSeq++; DB.ordenNro=DB.ordenSeq; DB.ordenRef='';
+  ordenExportadaProv=false;
+  DB.ordenRef='';
   DB.pedido=[]; DB.cots=[];
   DB.save();
   renderPedido();renderPiezas();renderBadge();renderCompra();
-  alert('Pedido cerrado. Quedó guardado en “Pedidos cerrados”.');
+  alert('Pedido cerrado. Se crearon '+provs.length+' órdenes (una por proveedor) en el historial.');
 };
 
 function renderCerrados(){
@@ -949,7 +956,7 @@ function renderCerrados(){
       : '<span class="flag" style="background:#33270f;color:var(--amber)">⚠ No pasado a Prov.</span>';
     return `<tr style="${completo?'':'background:rgba(230,164,23,.06)'}">
     <td class="mono" style="color:var(--green-bright)">${ordenCod(o.nro)}</td>
-    <td>${o.ref}<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">${etiqRec}${etiqProv}</div></td>
+    <td>${o.proveedor?`<b>${o.proveedor}</b><br><span style="color:var(--muted);font-size:12px">${o.ref}</span>`:o.ref}<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">${etiqRec}${etiqProv}</div></td>
     <td>${o.fecha}</td>
     <td class="right">${o.items.length}</td>
     <td class="right price">${fmt(o.total)}</td>
@@ -976,12 +983,12 @@ function reabrirCerrado(id){
   if(elegidasActuales().length||DB.pedido.length){
     if(!confirm('Tenés un pedido en curso. Si reabrís este, se reemplaza el actual. ¿Seguir?'))return;
   }
-  // reconstruir piezas/pedido/cots desde el cerrado
+  // reconstruir piezas/pedido/cots desde el cerrado (orden de un solo proveedor)
   o.items.forEach(it=>{
     let p=DB.piezas.find(x=>x.desc===it.desc&&x.codO===it.codO);
-    if(!p){p={id:uid(),marca:'',impl:'',cat:'',desc:it.desc,codO:it.codO,codA:it.codA};DB.piezas.push(p);}
+    if(!p){p={id:uid(),marca:'',impl:'',cat:it.cat||'',desc:it.desc,codO:it.codO,codA:it.codA};DB.piezas.push(p);}
     const cId=uid();
-    DB.cots.push({id:cId,piezaId:p.id,prov:it.prov,precio:it.u,moneda:'ARS',iva:'final',alic:'21'});
+    DB.cots.push({id:cId,piezaId:p.id,prov:it.prov,precio:it.u,moneda:'ARS',iva:'final',alic:'21',dto:0,dias:Number(it.dias)||0});
     DB.pedido.push({piezaId:p.id,qty:it.qty,provs:[it.prov],chosenList:[{cotId:cId,qty:it.qty}]});
   });
   DB.ordenNro=o.nro; DB.ordenRef=o.ref;
@@ -1227,9 +1234,27 @@ document.getElementById('menuPedidoProv').addEventListener('click',e=>{if(e.targ
 document.addEventListener('click',e=>{if(!ddPdfCompra.contains(e.target)&&!ddCsv.contains(e.target)&&!ddProv.contains(e.target)&&!ddPedidoProv.contains(e.target))closeDropdowns()});
 function pdfCerrado(id){
   const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
-  abrirImpresion('Orden de compra '+ordenCod(o.nro),o.ref+' · '+o.fecha,
-    ['Pieza','Cód. original','Cód. alternativo','Proveedor','Cant.','Precio unit. ARS','Subtotal'],
-    compraRowsFmt(o.items),'TOTAL A ABONAR',fmt(o.total));
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF();
+  if(LOGO_URI){try{doc.addImage(LOGO_URI,'PNG',170,10,26,26);}catch(e){}}
+  doc.setFontSize(16);doc.setFont(undefined,'bold');
+  doc.text('El Mestizo — Orden de compra',14,18);
+  doc.setFontSize(11);doc.setFont(undefined,'normal');
+  doc.text('Orden Nº: '+ordenCod(o.nro),14,26);
+  let y=32;
+  if(o.proveedor){doc.text('Proveedor: '+o.proveedor,14,y);y+=6;}
+  if(o.ref){doc.text('Referencia: '+o.ref,14,y);y+=6;}
+  doc.text('Fecha: '+o.fecha,14,y);y+=6;
+  doc.autoTable({
+    startY:y+2,
+    head:[['Categoría','Pieza','Cód. original','Cód. alternativo','Cant.']],
+    body:o.items.map(e=>[e.cat||'',e.desc,e.codO||'',e.codA||'',String(e.qty)]),
+    styles:{fontSize:9,cellPadding:2.5},
+    headStyles:{fillColor:[46,125,50],textColor:255},
+    alternateRowStyles:{fillColor:[245,247,244]},
+    margin:{left:14,right:14}
+  });
+  doc.save('orden-'+ordenCod(o.nro)+(o.proveedor?'-'+o.proveedor.replace(/[^\w\-]+/g,'_'):'')+'.pdf');
 }
 
 /* ---------- init: Firebase en tiempo real ---------- */
