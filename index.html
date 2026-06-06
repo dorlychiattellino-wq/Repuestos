@@ -919,8 +919,9 @@ document.getElementById('btnCerrarPedido').onclick=()=>{
   DB.cerrados.unshift({
     id:uid(), nro:DB.ordenNro, ref:DB.ordenRef||'(sin referencia)',
     fecha:new Date().toLocaleDateString('es-AR'), tc:DB.tc,
-    items:elegidas, total
+    items:elegidas, total, recibido:false, pasadoProv:ordenExportadaProv
   });
+  ordenExportadaProv=false; // reset para la próxima orden
   // arrancar pedido nuevo
   DB.ordenSeq++; DB.ordenNro=DB.ordenSeq; DB.ordenRef='';
   DB.pedido=[]; DB.cots=[];
@@ -932,17 +933,43 @@ document.getElementById('btnCerrarPedido').onclick=()=>{
 function renderCerrados(){
   const tb=document.querySelector('#tblCerrados tbody');
   if(!DB.cerrados.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty">Todavía no cerraste ningún pedido.</div></td></tr>`;return}
-  tb.innerHTML=DB.cerrados.map(o=>`<tr>
+  // pendientes primero (los que no están recibidos o no están pasados a proveedores)
+  const orden=[...DB.cerrados].sort((a,b)=>{
+    const pa=(a.recibido&&a.pasadoProv)?1:0;
+    const pb=(b.recibido&&b.pasadoProv)?1:0;
+    return pa-pb; // incompletos (0) arriba
+  });
+  tb.innerHTML=orden.map(o=>{
+    const completo=o.recibido&&o.pasadoProv;
+    const etiqRec=o.recibido
+      ? '<span class="flag ars" style="background:#15331f;color:#6fd38a">✓ Recibido</span>'
+      : '<span class="flag" style="background:#33270f;color:var(--amber)">⚠ Sin recibir</span>';
+    const etiqProv=o.pasadoProv
+      ? '<span class="flag ars" style="background:#15331f;color:#6fd38a">✓ En Proveedores</span>'
+      : '<span class="flag" style="background:#33270f;color:var(--amber)">⚠ No pasado a Prov.</span>';
+    return `<tr style="${completo?'':'background:rgba(230,164,23,.06)'}">
     <td class="mono" style="color:var(--green-bright)">${ordenCod(o.nro)}</td>
-    <td>${o.ref}</td><td>${o.fecha}</td>
+    <td>${o.ref}<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">${etiqRec}${etiqProv}</div></td>
+    <td>${o.fecha}</td>
     <td class="right">${o.items.length}</td>
     <td class="right price">${fmt(o.total)}</td>
     <td class="right" style="white-space:nowrap">
-      <button class="btn sm" onclick="reabrirCerrado('${o.id}')" title="Reabrir">↩ Abrir</button>
+      <button class="btn ghost sm" onclick="toggleRecibido('${o.id}')" title="Marcar recibido / sin recibir">📦</button>
+      <button class="btn ghost sm" onclick="togglePasadoProv('${o.id}')" title="Marcar pasado a Proveedores / no">📤</button>
+      <button class="btn sm" onclick="reabrirCerrado('${o.id}')" title="Reabrir">↩</button>
       <button class="btn ghost sm" onclick="editarCerrado('${o.id}')" title="Editar referencia">✎</button>
       <button class="btn ghost sm" onclick="pdfCerrado('${o.id}')" title="PDF">📄</button>
       <button class="btn danger sm" onclick="eliminarCerrado('${o.id}')" title="Eliminar">✕</button>
-    </td></tr>`).join('');
+    </td></tr>`;
+  }).join('');
+}
+function toggleRecibido(id){
+  const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
+  o.recibido=!o.recibido;DB.save();renderCerrados();
+}
+function togglePasadoProv(id){
+  const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
+  o.pasadoProv=!o.pasadoProv;DB.save();renderCerrados();
 }
 function reabrirCerrado(id){
   const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
@@ -1177,7 +1204,9 @@ function exportarProveedores(porProveedor){
     const filas=items.map(e=>filaProv(e,fecha,descPpto));
     descargarCSV('proveedores-'+ordenCod(DB.ordenNro),HEAD_PROV,filas);
   }
+  ordenExportadaProv=true; // recordar que esta orden ya se pasó a Proveedores
 }
+let ordenExportadaProv=false;
 document.getElementById('btnProvPorProv').onclick=()=>exportarProveedores(true);
 document.getElementById('btnProvTodo').onclick=()=>exportarProveedores(false);
 
@@ -1215,6 +1244,7 @@ function normalizar(){
   if(!Array.isArray(DB.cots))DB.cots=[];
   if(!Array.isArray(DB.proveedores))DB.proveedores=[];
   if(!Array.isArray(DB.cerrados))DB.cerrados=[];
+  DB.cerrados.forEach(o=>{if(typeof o.recibido!=='boolean')o.recibido=false;if(typeof o.pasadoProv!=='boolean')o.pasadoProv=false;});
   if(!DB.tc)DB.tc=1000;
   if(!DB.ordenSeq)DB.ordenSeq=1;
   if(!DB.ordenNro)DB.ordenNro=DB.ordenSeq;
@@ -1294,7 +1324,7 @@ Object.assign(window,{
   editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty,
   asignarProvPedido, quitarProvPedido, generarPDFProveedor,
   togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen, exportarPDFCompraProv,
-  editarCot, cerrarModalCot
+  editarCot, cerrarModalCot, toggleRecibido, togglePasadoProv
 });
 </script>
 </body>
