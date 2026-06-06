@@ -358,6 +358,33 @@
   </div>
 </div>
 
+<!-- ===== MODAL EDITAR COTIZACIÓN ===== -->
+<div class="modal-bg" id="modalCot">
+  <div class="modal">
+    <h3>Editar cotización</h3>
+    <div class="field"><label>Proveedor</label><input id="ec-prov" list="dlProv" autocomplete="off"></div>
+    <div class="grid-2">
+      <div class="field"><label>Precio</label><input id="ec-precio" type="number" step="0.01"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="ec-moneda"><option value="ARS">$ Pesos</option><option value="USD">U$D Dólar</option></select></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>IVA</label>
+        <select id="ec-iva"><option value="final">IVA final</option><option value="mas">+ IVA</option></select></div>
+      <div class="field"><label>Alícuota</label>
+        <select id="ec-alic"><option value="21">21%</option><option value="105">10,5%</option></select></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Dto %</label><input id="ec-dto" type="number" step="0.01"></div>
+      <div class="field"><label>Pago (días)</label><input id="ec-dias" type="number"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="cerrarModalCot()">Cancelar</button>
+      <button class="btn" id="ec-guardar">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL SELECCIONAR PROVEEDOR ===== -->
 <div class="modal-bg" id="modalProv">
   <div class="modal">
@@ -678,7 +705,7 @@ function renderCot(){
         <td>${Number(c.dto)?Number(c.dto)+'%':'—'}</td>
         <td>${Number(c.dias)?Number(c.dias)+' d':'—'}</td>
         <td class="right price">${fmt(toArsFinal(c))}${Number(c.dto)?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${fmt(toArsBruto(c))}</span>`:''}</td>
-        <td class="right"><button class="btn danger sm" onclick="delCot('${c.id}')">✕</button></td>
+        <td class="right" style="white-space:nowrap"><button class="btn ghost sm" onclick="editarCot('${c.id}')" title="Editar cotización">✎</button> <button class="btn danger sm" onclick="delCot('${c.id}')">✕</button></td>
       </tr>`).join(''):`<tr><td colspan="9" style="color:var(--muted)">Sin cotizaciones cargadas.</td></tr>`}
       </tbody></table></div>
       <div class="add-cot">
@@ -712,9 +739,44 @@ function addCot(piezaId){
     dias:Number(document.getElementById('cp-dias-'+piezaId).value)||0});
   DB.save();renderCot();
 }
-function delCot(id){const c=DB.cots.find(x=>x.id===id);DB.cots=DB.cots.filter(x=>x.id!==id);
-  // si era la elegida, deseleccionar
-  DB.cots.filter(x=>x.piezaId===c.piezaId).forEach(x=>{});DB.save();renderCot()}
+// editar una cotización existente (modal)
+let cotEditId=null;
+function editarCot(id){
+  const c=DB.cots.find(x=>x.id===id);if(!c)return;
+  cotEditId=id;
+  document.getElementById('ec-prov').value=c.prov||'';
+  document.getElementById('ec-precio').value=c.precio||'';
+  document.getElementById('ec-moneda').value=c.moneda||'ARS';
+  document.getElementById('ec-iva').value=c.iva||'final';
+  document.getElementById('ec-alic').value=c.alic||'21';
+  document.getElementById('ec-dto').value=Number(c.dto)||'';
+  document.getElementById('ec-dias').value=Number(c.dias)||'';
+  document.getElementById('modalCot').classList.add('open');
+}
+function cerrarModalCot(){document.getElementById('modalCot').classList.remove('open');cotEditId=null;}
+document.getElementById('modalCot').addEventListener('click',e=>{if(e.target.id==='modalCot')cerrarModalCot();});
+document.getElementById('ec-guardar').onclick=()=>{
+  const c=DB.cots.find(x=>x.id===cotEditId);if(!c)return;
+  const prov=document.getElementById('ec-prov').value.trim();
+  const precio=document.getElementById('ec-precio').value;
+  if(!prov||!precio){alert('Cargá proveedor y precio.');return}
+  c.prov=prov;
+  c.precio=Number(precio);
+  c.moneda=document.getElementById('ec-moneda').value;
+  c.iva=document.getElementById('ec-iva').value;
+  c.alic=document.getElementById('ec-alic').value;
+  c.dto=Number(document.getElementById('ec-dto').value)||0;
+  c.dias=Number(document.getElementById('ec-dias').value)||0;
+  if(!DB.proveedores.some(x=>x.toLowerCase()===prov.toLowerCase()))DB.proveedores.push(prov);
+  DB.save();cerrarModalCot();renderCot();renderComp();renderCompra();
+}
+function delCot(id){
+  const c=DB.cots.find(x=>x.id===id);if(!c)return;
+  // quitar esa cotización de cualquier elección del pedido
+  DB.pedido.forEach(it=>{if(Array.isArray(it.chosenList))it.chosenList=it.chosenList.filter(ch=>ch.cotId!==id);});
+  DB.cots=DB.cots.filter(x=>x.id!==id);
+  DB.save();renderCot();renderComp();renderCompra();
+}
 
 /* ---------- comparativo ---------- */
 function renderComp(){
@@ -1231,7 +1293,8 @@ Object.assign(window,{
   addCot, addPedido, choose, closeModal, delCot, delPedido, delPieza,
   editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty,
   asignarProvPedido, quitarProvPedido, generarPDFProveedor,
-  togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen, exportarPDFCompraProv
+  togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen, exportarPDFCompraProv,
+  editarCot, cerrarModalCot
 });
 </script>
 </body>
