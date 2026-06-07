@@ -1176,7 +1176,7 @@ function exportarPDFCompra(items,suf){
   doc.autoTable({
     startY:y+2,
     head:[['Categoría','Pieza','Implemento','Código','Proveedor','Cant.']],
-    body:items.map(e=>[e.cat||'',e.desc,e.impl||'',(e.codCotizado||''),e.prov,String(e.qty)]),
+    body:items.map(e=>[e.cat||'',e.desc,e.impl||'',(e.codCotizado?e.codCotizado+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),e.prov,String(e.qty)]),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
@@ -1361,7 +1361,7 @@ function pdfCerrado(id){
   doc.autoTable({
     startY:y+2,
     head:[['Categoría','Pieza','Implemento','Código','Cant.']],
-    body:o.items.map(e=>[e.cat||'',e.desc,e.impl||'',(e.codCotizado||e.codO||''),String(e.qty)]),
+    body:o.items.map(e=>{const cod=e.codCotizado!==undefined?e.codCotizado:(e.codO||'');return [e.cat||'',e.desc,e.impl||'',(cod?cod+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),String(e.qty)];}),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
