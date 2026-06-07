@@ -338,8 +338,13 @@
       </table>
     </div>
 
-    <div style="margin-top:30px;padding-top:16px;border-top:1px solid var(--line);text-align:right">
-      <button class="btn danger sm" id="btnReiniciarTodo" title="Borra TODO y arranca de cero">🗑 Reiniciar todo (borrar datos de prueba)</button>
+    <div style="margin-top:30px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
+      <span style="color:var(--muted);font-size:12px;margin-right:auto">Mantenimiento y respaldo</span>
+      <button class="btn ghost sm" id="btnBackup" title="Descargar copia de seguridad de todos los datos">💾 Hacer copia de seguridad</button>
+      <label class="btn ghost sm" style="cursor:pointer" title="Restaurar desde un archivo de copia">♻ Restaurar
+        <input type="file" accept=".json" id="inputRestore" style="display:none">
+      </label>
+      <button class="btn danger sm" id="btnReiniciarTodo" title="Borra TODO y arranca de cero">🗑 Reiniciar todo</button>
     </div>
   </section>
 
@@ -1259,6 +1264,41 @@ function csvCerradosPendientes(){
   DB.save();renderCerrados();
 }
 document.getElementById('btnCsvCerradosPend').onclick=csvCerradosPendientes;
+
+/* ---------- copia de seguridad / restaurar ---------- */
+document.getElementById('btnBackup').onclick=()=>{
+  const datos={
+    _backup:'AgroRepuestos', _fecha:new Date().toISOString(),
+    piezas:DB.piezas, pedido:DB.pedido, cots:DB.cots,
+    proveedores:DB.proveedores, cerrados:DB.cerrados,
+    tc:DB.tc, ordenSeq:DB.ordenSeq, ordenNro:DB.ordenNro, ordenRef:DB.ordenRef
+  };
+  const blob=new Blob([JSON.stringify(datos,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='backup-agrorepuestos-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();URL.revokeObjectURL(a.href);
+};
+document.getElementById('inputRestore').onchange=function(){
+  const file=this.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(d._backup!=='AgroRepuestos'){alert('Este archivo no parece una copia de AgroRepuestos.');return;}
+      if(!confirm('⚠ Restaurar reemplaza TODOS los datos actuales (de todo el equipo) por los de la copia.\n\nCopia del: '+(d._fecha?new Date(d._fecha).toLocaleString('es-AR'):'fecha desconocida')+'\n\n¿Continuar?'))return;
+      DB.piezas=d.piezas||[]; DB.pedido=d.pedido||[]; DB.cots=d.cots||[];
+      DB.proveedores=d.proveedores||[]; DB.cerrados=d.cerrados||[];
+      DB.tc=d.tc||DB.tc; DB.ordenSeq=d.ordenSeq||1; DB.ordenNro=d.ordenNro||DB.ordenSeq; DB.ordenRef=d.ordenRef||'';
+      normalizar();
+      DB.save();
+      refreshFilters();renderPiezas();renderPedido();renderBadge();renderCot();renderComp();renderCompra();
+      alert('✅ Datos restaurados correctamente.');
+    }catch(err){alert('No se pudo leer el archivo de copia. ¿Está completo?');console.error(err);}
+  };
+  reader.readAsText(file);
+  this.value=''; // permite volver a elegir el mismo archivo
+};
 
 /* ---------- reiniciar todo (borrar datos de prueba) ---------- */
 document.getElementById('btnReiniciarTodo').onclick=()=>{
