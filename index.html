@@ -616,7 +616,7 @@ function renderPedido(){
     const provs=Array.isArray(it.provs)?it.provs:[];
     const chips=provs.map(pr=>`<span class="prov-chip">${pr}<b onclick="quitarProvPedido('${it.piezaId}','${pr.replace(/'/g,"\\'")}')">✕</b></span>`).join('');
     return `<tr>
-      <td>${p.desc}</td><td><span class="pill cat">${p.cat}</span></td>
+      <td>${p.desc}${p.impl?`<br><span style="color:var(--muted);font-size:12px">${p.impl}</span>`:''}</td><td><span class="pill cat">${p.cat}</span></td>
       <td class="mono">${p.codO||'—'}</td>
       <td class="mono">${p.codA||'—'}</td>
       <td><div class="prov-chips">${chips}<button class="prov-add" onclick="asignarProvPedido('${it.piezaId}')">+ asignar</button></div></td>
@@ -703,7 +703,7 @@ function renderCot(){
     return `<div class="pieza-cot">
       <div class="pieza-cot-head">
         <span class="t">${p.desc}</span>
-        <span class="pill">${p.marca}</span><span class="pill cat">${p.cat}</span>
+        ${p.impl?`<span class="pill" style="color:var(--green-bright);border-color:var(--green)">${p.impl}</span>`:''}<span class="pill cat">${p.cat}</span>
         <span class="mono" style="color:var(--muted)">orig: ${p.codO||'—'}</span>
         <span style="margin-left:auto" class="pill">Cant: ${it.qty}</span>
       </div>
@@ -805,7 +805,8 @@ function renderComp(){
     cots.sort((a,b)=>a.ars-b.ars);
     return `<div class="pieza-cot">
       <div class="pieza-cot-head"><span class="t">${p.desc}</span>
-        <span class="pill cat">${p.cat}</span><span class="pill">Cant: ${it.qty}</span></div>
+        ${p.impl?`<span class="pill" style="color:var(--green-bright);border-color:var(--green)">${p.impl}</span>`:''}<span class="pill cat">${p.cat}</span>
+        <span class="mono" style="color:var(--muted)">orig: ${p.codO||'—'}</span><span class="pill">Cant: ${it.qty}</span></div>
       <div style="overflow:auto"><table>
       <thead><tr><th>Proveedor</th><th class="right">ARS final/u</th><th>Dto</th><th>Pago</th><th>Mejor</th><th class="right">Comprar</th></tr></thead>
       <tbody>${cots.map(c=>{
@@ -864,7 +865,7 @@ function elegidasActuales(){
     it.chosenList.forEach(ch=>{
       const c=DB.cots.find(x=>x.id===ch.cotId);if(!c)return;
       const u=toArsFinal(c);const q=ch.qty||0;
-      out.push({piezaId:it.piezaId,cotId:c.id,desc:p.desc,codO:p.codO||'',codA:p.codA||'',cat:p.cat||'',
+      out.push({piezaId:it.piezaId,cotId:c.id,desc:p.desc,impl:p.impl||'',codO:p.codO||'',codA:p.codA||'',cat:p.cat||'',
         prov:c.prov,qty:q,u,sub:u*q,
         precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21',
         dto:Number(c.dto)||0,dias:Number(c.dias)||0});
@@ -909,7 +910,7 @@ function renderCompra(){
     stats.innerHTML='';document.getElementById('compraTotal').textContent='$0';document.getElementById('compraNota').textContent='';
   }else{
     tb.innerHTML=elegidas.map(e=>`<tr>
-      <td>${e.desc}</td><td class="mono">${e.codO||'—'}</td><td class="mono">${e.codA||'—'}</td>
+      <td>${e.desc}${e.impl?`<br><span style="color:var(--muted);font-size:12px">${e.impl}</span>`:''}</td><td class="mono">${e.codO||'—'}</td><td class="mono">${e.codA||'—'}</td>
       <td>${e.prov}</td><td class="right"><input class="qty" type="number" min="1" value="${e.qty}" onchange="setQtyCompra('${e.piezaId}','${e.cotId}',this.value)"></td>
       <td class="right price">${fmt(e.u)}</td><td class="right price win">${fmt(e.sub)}</td></tr>`).join('');
     const total=elegidas.reduce((s,e)=>s+e.sub,0);
@@ -1086,7 +1087,7 @@ document.getElementById('btnCsvPedido').onclick=()=>{
 // devuelve las piezas asignadas a un proveedor dado
 function piezasDeProveedor(prov){
   return DB.pedido.filter(it=>Array.isArray(it.provs)&&it.provs.some(x=>x.toLowerCase()===prov.toLowerCase()))
-    .map(it=>{const p=DB.piezas.find(x=>x.id===it.piezaId);return p?{cat:p.cat||'',desc:p.desc||'',codO:p.codO||'',codA:p.codA||'',qty:it.qty}:null})
+    .map(it=>{const p=DB.piezas.find(x=>x.id===it.piezaId);return p?{cat:p.cat||'',desc:p.desc||'',impl:p.impl||'',codO:p.codO||'',codA:p.codA||'',qty:it.qty}:null})
     .filter(Boolean);
 }
 // lista de proveedores que tienen al menos una pieza asignada
@@ -1113,8 +1114,8 @@ function generarPDFProveedor(prov){
   doc.text('Fecha: '+fecha,14,DB.ordenRef?38:32);
   doc.autoTable({
     startY:DB.ordenRef?44:38,
-    head:[['Categoría','Pieza','Cód. original','Cód. alternativo','Cant.']],
-    body:items.map(i=>[i.cat,i.desc,i.codO,i.codA,String(i.qty)]),
+    head:[['Categoría','Pieza','Implemento','Cód. original','Cód. alternativo','Cant.']],
+    body:items.map(i=>[i.cat,i.desc,i.impl||'',i.codO,i.codA,String(i.qty)]),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
@@ -1157,8 +1158,8 @@ function exportarPDFCompra(items,suf){
   doc.text('Fecha: '+fecha,14,y);y+=6;
   doc.autoTable({
     startY:y+2,
-    head:[['Categoría','Pieza','Cód. original','Cód. alternativo','Proveedor','Cant.']],
-    body:items.map(e=>[e.cat||'',e.desc,e.codO||'',e.codA||'',e.prov,String(e.qty)]),
+    head:[['Categoría','Pieza','Implemento','Cód. original','Cód. alternativo','Proveedor','Cant.']],
+    body:items.map(e=>[e.cat||'',e.desc,e.impl||'',e.codO||'',e.codA||'',e.prov,String(e.qty)]),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
@@ -1342,8 +1343,8 @@ function pdfCerrado(id){
   doc.text('Fecha: '+o.fecha,14,y);y+=6;
   doc.autoTable({
     startY:y+2,
-    head:[['Categoría','Pieza','Cód. original','Cód. alternativo','Cant.']],
-    body:o.items.map(e=>[e.cat||'',e.desc,e.codO||'',e.codA||'',String(e.qty)]),
+    head:[['Categoría','Pieza','Implemento','Cód. original','Cód. alternativo','Cant.']],
+    body:o.items.map(e=>[e.cat||'',e.desc,e.impl||'',e.codO||'',e.codA||'',String(e.qty)]),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
