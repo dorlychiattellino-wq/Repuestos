@@ -881,7 +881,7 @@ function elegidasActuales(){
     it.chosenList.forEach(ch=>{
       const c=DB.cots.find(x=>x.id===ch.cotId);if(!c)return;
       const u=toArsFinal(c);const q=ch.qty||0;
-      out.push({piezaId:it.piezaId,cotId:c.id,desc:p.desc,impl:p.impl||'',codO:p.codO||'',codA:p.codA||'',cat:p.cat||'',
+      out.push({piezaId:it.piezaId,cotId:c.id,desc:p.desc,impl:p.impl||'',marca:p.marca||'',codO:p.codO||'',codA:p.codA||'',cat:p.cat||'',
         codCotizado:codigoCotizado(p,c),tipoCod:(c.codigo||'O'),
         prov:c.prov,qty:q,u,sub:u*q,
         precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21',
@@ -1104,7 +1104,7 @@ document.getElementById('btnCsvPedido').onclick=()=>{
 // devuelve las piezas asignadas a un proveedor dado
 function piezasDeProveedor(prov){
   return DB.pedido.filter(it=>Array.isArray(it.provs)&&it.provs.some(x=>x.toLowerCase()===prov.toLowerCase()))
-    .map(it=>{const p=DB.piezas.find(x=>x.id===it.piezaId);return p?{cat:p.cat||'',desc:p.desc||'',impl:p.impl||'',codO:p.codO||'',codA:p.codA||'',qty:it.qty}:null})
+    .map(it=>{const p=DB.piezas.find(x=>x.id===it.piezaId);return p?{cat:p.cat||'',marca:p.marca||'',desc:p.desc||'',impl:p.impl||'',codO:p.codO||'',codA:p.codA||'',qty:it.qty}:null})
     .filter(Boolean);
 }
 // lista de proveedores que tienen al menos una pieza asignada
@@ -1131,8 +1131,8 @@ function generarPDFProveedor(prov){
   doc.text('Fecha: '+fecha,14,DB.ordenRef?38:32);
   doc.autoTable({
     startY:DB.ordenRef?44:38,
-    head:[['Categoría','Pieza','Implemento','Cód. original','Cód. alternativo','Cant.']],
-    body:items.map(i=>[i.cat,i.desc,i.impl||'',i.codO,i.codA,String(i.qty)]),
+    head:[['Marca','Pieza','Implemento','Cód. original','Cód. alternativo','Cant.']],
+    body:items.map(i=>[i.marca||'',i.desc,i.impl||'',i.codO,i.codA,String(i.qty)]),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
@@ -1175,8 +1175,8 @@ function exportarPDFCompra(items,suf){
   doc.text('Fecha: '+fecha,14,y);y+=6;
   doc.autoTable({
     startY:y+2,
-    head:[['Categoría','Pieza','Implemento','Código','Proveedor','Cant.']],
-    body:items.map(e=>[e.cat||'',e.desc,e.impl||'',(e.codCotizado?e.codCotizado+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),e.prov,String(e.qty)]),
+    head:[['Marca','Pieza','Implemento','Código','Proveedor','Cant.']],
+    body:items.map(e=>[e.marca||'',e.desc,e.impl||'',(e.codCotizado?e.codCotizado+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),e.prov,String(e.qty)]),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
@@ -1360,8 +1360,8 @@ function pdfCerrado(id){
   doc.text('Fecha: '+o.fecha,14,y);y+=6;
   doc.autoTable({
     startY:y+2,
-    head:[['Categoría','Pieza','Implemento','Código','Cant.']],
-    body:o.items.map(e=>{const cod=e.codCotizado!==undefined?e.codCotizado:(e.codO||'');return [e.cat||'',e.desc,e.impl||'',(cod?cod+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),String(e.qty)];}),
+    head:[['Marca','Pieza','Implemento','Código','Cant.']],
+    body:o.items.map(e=>{const cod=e.codCotizado!==undefined?e.codCotizado:(e.codO||'');return [e.marca||'',e.desc,e.impl||'',(cod?cod+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),String(e.qty)];}),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
