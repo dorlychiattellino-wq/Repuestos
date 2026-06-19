@@ -443,16 +443,24 @@ const RAIZ = 'repuestos';
 const DB={
   piezas:[], pedido:[], cots:[], proveedores:[], tc:1000,
   ordenSeq:1, ordenNro:1, ordenRef:'', cerrados:[],
-  _ready:false, _guardando:false,
+  _ready:false, _ultimoGuardado:null,
   // empaqueta solo los datos (sin funciones) para guardar
   _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados}},
+  _fp(d){ // huella estable de los datos (para comparar mi guardado vs lo que llega)
+    return JSON.stringify({
+      piezas:d.piezas||[], pedido:d.pedido||[], cots:d.cots||[],
+      proveedores:d.proveedores||[], tc:d.tc||1000,
+      ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||1,
+      ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'', cerrados:d.cerrados||[]
+    });
+  },
   load(){/* la carga real la hace el listener onValue de abajo */},
   save(){
     if(!this._ready)return; // no guardar hasta haber cargado lo de la nube
-    this._guardando=true;
-    set(ref(fbDb,RAIZ),this._datos())
-      .catch(e=>console.error('Error guardando en Firebase',e))
-      .finally(()=>{this._guardando=false;});
+    const datos=this._datos();
+    this._ultimoGuardado=this._fp(datos); // recordar exactamente lo que mando
+    set(ref(fbDb,RAIZ),datos)
+      .catch(e=>console.error('Error guardando en Firebase',e));
   }
 };
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -1492,8 +1500,11 @@ function setConn(ok){
 const raizRef=ref(fbDb,RAIZ);
 onValue(raizRef, snap=>{
   setConn(true);
-  if(!DB._guardando){ // si el cambio no lo provoqué yo guardando, traigo lo nuevo
-    const d=snap.val()||{};
+  const d=snap.val()||{};
+  // huella de lo que llega, para comparar contra lo último que yo guardé
+  const entrante=DB._fp(d);
+  const esMiEco = (entrante===DB._ultimoGuardado);
+  if(!esMiEco){ // cambio externo real (otro dispositivo) o primera carga: lo traigo
     Object.assign(DB,{
       piezas:d.piezas||[], pedido:d.pedido||[], cots:d.cots||[],
       proveedores:d.proveedores||[], cerrados:d.cerrados||[],
@@ -1502,15 +1513,14 @@ onValue(raizRef, snap=>{
     });
     const antes=DB.pedido.length;
     normalizar();
-    // si el saneo eliminó duplicados, guardo la versión limpia
-    if(DB.pedido.length!==antes)DB.save();
+    if(DB.pedido.length!==antes)DB.save(); // si el saneo limpió duplicados, persisto
+    redibujarTodo();
   }
   if(!DB._ready){
     DB._ready=true;
-    // traigo el TC automático al abrir (en segundo plano)
     traerTC().then(tc=>{if(tc){DB.tc=tc;DB.save();setTC(tc);renderCot();renderComp();renderCompra();}});
+    redibujarTodo();
   }
-  redibujarTodo();
 }, err=>{
   console.error('Firebase:',err);
   setConn(false);
