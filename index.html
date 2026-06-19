@@ -345,6 +345,7 @@
       <label class="btn ghost sm" style="cursor:pointer" title="Restaurar desde un archivo de copia">♻ Restaurar
         <input type="file" accept=".json" id="inputRestore" style="display:none">
       </label>
+      <button class="btn ghost sm" id="btnResetNro" title="Reinicia solo el número de orden a OC-0001, sin borrar nada más">🔢 Nº de orden a OC-0001</button>
       <button class="btn danger sm" id="btnReiniciarTodo" title="Borra TODO y arranca de cero">🗑 Reiniciar todo</button>
     </div>
   </section>
@@ -1390,6 +1391,15 @@ document.getElementById('inputRestore').onchange=function(){
 };
 
 /* ---------- reiniciar todo (borrar datos de prueba) ---------- */
+// reiniciar SOLO el número de orden a OC-0001 (no toca catálogo, proveedores, pedido ni cerrados)
+document.getElementById('btnResetNro').onclick=()=>{
+  if(!confirm('¿Reiniciar el número de orden a OC-0001?\n\nEsto NO borra el catálogo, ni proveedores, ni el pedido en curso, ni los pedidos cerrados. Solo cambia el número que tendrá la próxima orden.'))return;
+  DB.ordenSeq=1; DB.ordenNro=1;
+  DB.save();
+  renderCompra();
+  alert('✅ Listo. La próxima orden será OC-0001.');
+};
+
 document.getElementById('btnReiniciarTodo').onclick=()=>{
   if(!confirm('⚠ ATENCIÓN: esto borra TODO (catálogo, pedido, cotizaciones, proveedores y pedidos cerrados) y reinicia las órdenes a OC-0001.\n\nSe borra para TODO el equipo. ¿Seguro?'))return;
   if(!confirm('Última confirmación: ¿Borrar todo y arrancar de cero? Esta acción no se puede deshacer.'))return;
