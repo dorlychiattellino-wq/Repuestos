@@ -978,6 +978,25 @@ document.getElementById('btnCerrarParcial').onclick=()=>{
     if(Array.isArray(it.chosenList))it.chosenList=it.chosenList.filter(ch=>!cotIdsCerradas.has(ch.cotId));
   });
   DB.cots=DB.cots.filter(c=>!cotIdsCerradas.has(c.id)); // quitar las cotizaciones ya pedidas
+  // quitar de cada pieza los proveedores que ya se cerraron (si no le queda otra cotización de ese prov)
+  const provsCerrados=new Set(elegidas.map(e=>e.prov.toLowerCase()));
+  DB.pedido.forEach(it=>{
+    if(Array.isArray(it.provs)){
+      it.provs=it.provs.filter(pr=>{
+        if(!provsCerrados.has(pr.toLowerCase()))return true; // no se cerró, queda
+        // se cerró: lo quito salvo que todavía tenga otra cotización viva de ese proveedor para esta pieza
+        return DB.cots.some(c=>c.piezaId===it.piezaId&&c.prov.toLowerCase()===pr.toLowerCase());
+      });
+    }
+  });
+  // sacar del pedido las piezas que ya no tienen nada pendiente
+  // (sin cotizaciones vivas, sin proveedores asignados y sin elecciones)
+  DB.pedido=DB.pedido.filter(it=>{
+    const tieneCots=DB.cots.some(c=>c.piezaId===it.piezaId);
+    const tieneProvs=Array.isArray(it.provs)&&it.provs.length>0;
+    const tieneElegidas=Array.isArray(it.chosenList)&&it.chosenList.length>0;
+    return tieneCots||tieneProvs||tieneElegidas; // si no tiene nada, se va
+  });
   ordenExportadaProv=false;
   DB.save();
   renderPedido();renderPiezas();renderBadge();renderCompra();renderCot();renderComp();
@@ -1049,20 +1068,28 @@ function togglePasadoProv(id){
 }
 function reabrirCerrado(id){
   const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
-  if(elegidasActuales().length||DB.pedido.length){
-    if(!confirm('Tenés un pedido en curso. Si reabrís este, se reemplaza el actual. ¿Seguir?'))return;
-  }
-  // reconstruir piezas/pedido/cots desde el cerrado (orden de un solo proveedor)
+  if(!confirm('Reabrir esta orden la vuelve a poner como pedido en curso (se suma a lo que ya tengas, sin duplicar). ¿Seguir?'))return;
   o.items.forEach(it=>{
+    // buscar la pieza en el catálogo (o crearla si no está)
     let p=DB.piezas.find(x=>x.desc===it.desc&&x.codO===it.codO);
-    if(!p){p={id:uid(),marca:'',impl:'',cat:it.cat||'',desc:it.desc,codO:it.codO,codA:it.codA};DB.piezas.push(p);}
+    if(!p){p={id:uid(),marca:it.marca||'',impl:it.impl||'',cat:it.cat||'',desc:it.desc,codO:it.codO,codA:it.codA};DB.piezas.push(p);}
+    // crear la cotización de ese proveedor
     const cId=uid();
-    DB.cots.push({id:cId,piezaId:p.id,prov:it.prov,precio:it.u,moneda:'ARS',iva:'final',alic:'21',dto:0,dias:Number(it.dias)||0});
-    DB.pedido.push({piezaId:p.id,qty:it.qty,provs:[it.prov],chosenList:[{cotId:cId,qty:it.qty}]});
+    DB.cots.push({id:cId,piezaId:p.id,prov:it.prov,precio:it.u,moneda:'ARS',iva:'final',alic:'21',dto:0,dias:Number(it.dias)||0,codigo:it.tipoCod||'O'});
+    // buscar si la pieza YA está en el pedido; si está, fusiono; si no, la agrego
+    let ped=DB.pedido.find(x=>x.piezaId===p.id);
+    if(!ped){
+      ped={piezaId:p.id,qty:it.qty,provs:[],chosenList:[]};
+      DB.pedido.push(ped);
+    }
+    if(!Array.isArray(ped.provs))ped.provs=[];
+    if(!ped.provs.some(x=>x.toLowerCase()===it.prov.toLowerCase()))ped.provs.push(it.prov);
+    if(!Array.isArray(ped.chosenList))ped.chosenList=[];
+    ped.chosenList.push({cotId:cId,qty:it.qty});
   });
-  DB.ordenNro=o.nro; DB.ordenRef=o.ref;
+  if(!DB.ordenRef)DB.ordenRef=o.ref;
   DB.cerrados=DB.cerrados.filter(x=>x.id!==id);
-  DB.save();refreshFilters();renderPiezas();renderPedido();renderBadge();renderCompra();
+  DB.save();refreshFilters();renderPiezas();renderPedido();renderBadge();renderCot();renderComp();renderCompra();
   document.querySelector('[data-view=compra]').click();
 }
 function editarCerrado(id){
