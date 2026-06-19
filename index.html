@@ -266,7 +266,8 @@
         <p class="sub" style="margin-bottom:0">Las piezas que elegiste con su proveedor y precio. Esto es lo que tenés que abonar.</p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="btn amber" id="btnCerrarPedido">🔒 Cerrar pedido</button>
+        <button class="btn amber" id="btnCerrarParcial" title="Cierra solo los proveedores tildados y deja el resto para seguir comprando">🔒 Cerrar lo pedido</button>
+        <button class="btn danger" id="btnFinalizarPedido" title="Cierra todo lo tildado y borra el pedido y las cotizaciones para arrancar de cero">🏁 Finalizar pedido</button>
         <div class="dropdown" id="ddPdfCompra">
           <button class="btn ghost" id="btnPdfCompraMenu">📄 PDF por proveedor ▾</button>
           <div class="dropdown-menu" id="menuPdfCompra">
@@ -503,7 +504,10 @@ document.getElementById('tcRefresh').onclick=async()=>{
 /* ---------- filtros / selects ---------- */
 function uniq(arr){return [...new Set(arr)].sort()}
 function fillSelect(sel,vals,label){
+  const prev=sel.value; // recordar lo que estaba elegido
   sel.innerHTML='<option value="">'+label+'</option>'+vals.map(v=>`<option>${v}</option>`).join('');
+  // si el valor anterior sigue existiendo entre las opciones, lo vuelvo a seleccionar
+  if(prev&&vals.includes(prev))sel.value=prev;
 }
 function refreshFilters(){
   fillSelect(fMarca,uniq(DB.piezas.map(p=>p.marca)),'Todas las marcas');
@@ -943,14 +947,11 @@ function renderCompra(){
 }
 
 /* ---------- cerrar / historial ---------- */
-document.getElementById('btnCerrarPedido').onclick=()=>{
-  const elegidas=elegidasActuales();
-  if(!elegidas.length){alert('No hay piezas elegidas para cerrar el pedido.');return}
+// crea las órdenes cerradas (una por proveedor) a partir de lo tildado
+function cerrarElegidas(elegidas){
   const provs=uniq(elegidas.map(e=>e.prov));
-  if(!confirm('¿Cerrar este pedido? Se va a crear una orden de compra por cada proveedor ('+provs.length+'). Cada una queda independiente en el historial.'))return;
   const fecha=new Date().toLocaleDateString('es-AR');
   const ref=DB.ordenRef||'(sin referencia)';
-  // crear una orden cerrada por cada proveedor, con su propio número
   provs.forEach(prov=>{
     const items=elegidas.filter(e=>e.prov===prov);
     const total=items.reduce((s,e)=>s+e.sub,0);
@@ -959,14 +960,49 @@ document.getElementById('btnCerrarPedido').onclick=()=>{
       fecha, tc:DB.tc, items, total,
       recibido:false, pasadoProv:ordenExportadaProv
     });
-    DB.ordenNro=++DB.ordenSeq; // siguiente número para el próximo proveedor
+    DB.ordenNro=++DB.ordenSeq;
   });
+  return provs.length;
+}
+
+// CERRAR LO PEDIDO (parcial): cierra solo lo tildado, deja el resto vivo
+document.getElementById('btnCerrarParcial').onclick=()=>{
+  const elegidas=elegidasActuales();
+  if(!elegidas.length){alert('No tildaste ninguna pieza/proveedor para cerrar. Marcá en el Comparativo lo que ya pediste.');return}
+  const provs=uniq(elegidas.map(e=>e.prov));
+  if(!confirm('¿Cerrar lo que ya pediste? Se crearán '+provs.length+' orden(es) (una por proveedor tildado): '+provs.join(', ')+'.\n\nLas demás cotizaciones que NO tildaste quedan disponibles para seguir comprando.'))return;
+  const n=cerrarElegidas(elegidas);
+  // borrar SOLO las elecciones tildadas (y las cotizaciones de esos renglones)
+  const cotIdsCerradas=new Set(elegidas.map(e=>e.cotId));
+  DB.pedido.forEach(it=>{
+    if(Array.isArray(it.chosenList))it.chosenList=it.chosenList.filter(ch=>!cotIdsCerradas.has(ch.cotId));
+  });
+  DB.cots=DB.cots.filter(c=>!cotIdsCerradas.has(c.id)); // quitar las cotizaciones ya pedidas
+  ordenExportadaProv=false;
+  DB.save();
+  renderPedido();renderPiezas();renderBadge();renderCompra();renderCot();renderComp();
+  alert('Listo. Se cerraron '+n+' orden(es). El resto sigue disponible en Cotizaciones y Comparativo.');
+};
+
+// FINALIZAR PEDIDO (total): cierra lo tildado y borra TODO para arrancar de cero
+document.getElementById('btnFinalizarPedido').onclick=()=>{
+  const elegidas=elegidasActuales();
+  let msg='¿Finalizar el pedido? ';
+  if(elegidas.length){
+    const provs=uniq(elegidas.map(e=>e.prov));
+    msg+='Se cerrarán '+provs.length+' orden(es) de lo que tenés tildado, y luego se borrará TODO (pedido y cotizaciones) para arrancar de cero.';
+  }else{
+    msg+='No tenés nada tildado, así que se borrará TODO (pedido y cotizaciones) sin crear órdenes.';
+  }
+  if(!confirm(msg))return;
+  let n=0;
+  if(elegidas.length)n=cerrarElegidas(elegidas);
   ordenExportadaProv=false;
   DB.ordenRef='';
   DB.pedido=[]; DB.cots=[];
   DB.save();
-  renderPedido();renderPiezas();renderBadge();renderCompra();
-  alert('Pedido cerrado. Se crearon '+provs.length+' órdenes (una por proveedor) en el historial.');
+  renderPedido();renderPiezas();renderBadge();renderCompra();renderCot();renderComp();
+  alert(n?('Pedido finalizado. Se crearon '+n+' orden(es) y se limpió todo.'):'Pedido finalizado y todo limpio.');
 };
 
 function renderCerrados(){
