@@ -490,16 +490,12 @@ const tcInput=document.getElementById('tcInput');
 function setTC(v){DB.tc=Number(v)||DB.tc;tcInput.value=DB.tc;DB.save()}
 tcInput.onchange=()=>{setTC(tcInput.value);renderCot();renderComp();renderCompra()};
 
-// trae el dólar BNA venta (Banco Nación). Prioriza la fuente del BNA exacto y deja respaldos.
+// trae el dólar oficial BNA venta (misma fuente que las otras apps de El Mestizo)
 async function traerTC(){
   const fuentes=[
-    // 1) Banco Nación exacto (api-dolar-argentina)
-    async()=>{const r=await fetch('https://api.argentinadatos.com/v1/cotizaciones/dolares/oficial');const d=await r.json();const ult=Array.isArray(d)?d[d.length-1]:d;return parseFloat(ult?.venta)||null;},
-    // 2) Banco Nación vía dolarapi (casas/bancos)
-    async()=>{const r=await fetch('https://dolarapi.com/v1/ambito/dolares/oficial');const d=await r.json();return parseFloat(d?.venta)||null;},
-    // 3) respaldo: dólar oficial (promedio)
     async()=>{const r=await fetch('https://dolarapi.com/v1/dolares/oficial');const d=await r.json();return parseFloat(d?.venta)||null;},
-    async()=>{const r=await fetch('https://api.bluelytics.com.ar/v2/latest');const d=await r.json();return parseFloat(d?.oficial?.value_sell)||null;}
+    async()=>{const r=await fetch('https://api.bluelytics.com.ar/v2/latest');const d=await r.json();return parseFloat(d?.oficial?.value_sell)||null;},
+    async()=>{const r=await fetch('https://dolarapi.com/v1/cotizaciones/oficial');const d=await r.json();return parseFloat(d?.venta)||null;}
   ];
   for(const f of fuentes){
     try{const tc=await f();if(tc){return tc;}}catch(e){}
