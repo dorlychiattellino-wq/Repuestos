@@ -705,6 +705,23 @@ function toArsFinal(c){
   const dto=Number(c.dto)||0;
   return bruto*(1-dto/100);
 }
+// precio FINAL por unidad en la MONEDA ORIGINAL (USD o ARS), con IVA y dto aplicados
+function precioFinalMoneda(c){
+  let base=Number(c.precio)||0;
+  if(c.iva==='mas'){const al=c.alic==='105'?1.105:1.21;base=base*al;}
+  const dto=Number(c.dto)||0;
+  return base*(1-dto/100);
+}
+// arma el HTML del precio para mostrar: si es USD, destaca U$D y agrega los $ de referencia (al TC actual)
+function precioDual(c){
+  const finalArs=toArsFinal(c);
+  if(c.moneda==='USD'){
+    const usd=precioFinalMoneda(c);
+    return `<span class="flag usd" style="margin-right:4px">USD</span>${usd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}`
+      +`<br><span style="color:var(--muted);font-size:11px">≈ ${fmt(finalArs)}</span>`;
+  }
+  return fmt(finalArs);
+}
 // devuelve el código (original o alternativo) según con cuál cotizó el proveedor
 // si la pieza no tiene ese código cargado, devuelve '' (vacío)
 function codigoCotizado(pieza,cot){
@@ -845,7 +862,7 @@ function renderComp(){
         return `<tr class="${best?'best-row':''}">
           <td>${c.prov} ${best?'<span class="tag-best">Mejor precio</span>':''}</td>
           <td class="mono">${(c.codigo||'O')==='A'?'ALT: ':'ORIG: '}${codigoCotizado(p,c)||'—'}</td>
-          <td class="right price ${best?'win':''}">${fmt(c.ars)}${tieneDto?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${fmt(toArsBruto(c))}</span>`:''}</td>
+          <td class="right price ${best?'win':''}">${precioDual(c)}${tieneDto?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${c.moneda==='USD'?('USD '+(toArsBruto(c)/DB.tc).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})):fmt(toArsBruto(c))}</span>`:''}</td>
           <td>${tieneDto?Number(c.dto)+'%':'—'}</td>
           <td>${Number(c.dias)?Number(c.dias)+' d':'—'}</td>
           <td>${best?'✅':'—'}</td>
@@ -895,9 +912,10 @@ function elegidasActuales(){
     it.chosenList.forEach(ch=>{
       const c=DB.cots.find(x=>x.id===ch.cotId);if(!c)return;
       const u=toArsFinal(c);const q=ch.qty||0;
+      const uUsd=(c.moneda==='USD')?precioFinalMoneda(c):null;
       out.push({piezaId:it.piezaId,cotId:c.id,desc:p.desc,impl:p.impl||'',marca:p.marca||'',codO:p.codO||'',codA:p.codA||'',cat:p.cat||'',
         codCotizado:codigoCotizado(p,c),tipoCod:(c.codigo||'O'),
-        prov:c.prov,qty:q,u,sub:u*q,
+        prov:c.prov,qty:q,u,sub:u*q,uUsd,subUsd:uUsd!=null?uUsd*q:null,
         precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21',
         dto:Number(c.dto)||0,dias:Number(c.dias)||0});
     });
@@ -943,7 +961,7 @@ function renderCompra(){
     tb.innerHTML=elegidas.map(e=>`<tr>
       <td>${e.desc}${e.impl?`<br><span style="color:var(--muted);font-size:12px">${e.impl}</span>`:''}</td><td class="mono">${e.tipoCod==='A'?'ALT: ':'ORIG: '}${e.codCotizado||'—'}</td>
       <td>${e.prov}</td><td class="right"><input class="qty" type="number" min="1" value="${e.qty}" onchange="setQtyCompra('${e.piezaId}','${e.cotId}',this.value)"></td>
-      <td class="right price">${fmt(e.u)}</td><td class="right price win">${fmt(e.sub)}</td></tr>`).join('');
+      <td class="right price">${e.uUsd!=null?`<span class="flag usd" style="margin-right:3px">USD</span>${e.uUsd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}<br><span style="color:var(--muted);font-size:11px">≈ ${fmt(e.u)}</span>`:fmt(e.u)}</td><td class="right price win">${e.subUsd!=null?`<span class="flag usd" style="margin-right:3px">USD</span>${e.subUsd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}<br><span style="color:var(--muted);font-size:11px">≈ ${fmt(e.sub)}</span>`:fmt(e.sub)}</td></tr>`).join('');
     const total=elegidas.reduce((s,e)=>s+e.sub,0);
     const provs=uniq(elegidas.map(e=>e.prov));
     stats.innerHTML=`
