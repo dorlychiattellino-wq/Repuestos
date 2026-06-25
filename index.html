@@ -446,13 +446,14 @@ const DB={
   ordenSeq:1, ordenNro:1, ordenRef:'', cerrados:[],
   _ready:false, _ultimoGuardado:null,
   // empaqueta solo los datos (sin funciones) para guardar
-  _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados}},
+  _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados,nrosReservados:this.nrosReservados||{}}},
   _fp(d){ // huella estable de los datos (para comparar mi guardado vs lo que llega)
     return JSON.stringify({
       piezas:d.piezas||[], pedido:d.pedido||[], cots:d.cots||[],
       proveedores:d.proveedores||[], tc:d.tc||1000,
       ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||1,
-      ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'', cerrados:d.cerrados||[]
+      ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'', cerrados:d.cerrados||[],
+      nrosReservados:d.nrosReservados||{}
     });
   },
   load(){/* la carga real la hace el listener onValue de abajo */},
@@ -961,15 +962,25 @@ function cerrarElegidas(elegidas){
   const provs=uniq(elegidas.map(e=>e.prov));
   const fecha=new Date().toLocaleDateString('es-AR');
   const ref=DB.ordenRef||'(sin referencia)';
+  if(!DB.nrosReservados||typeof DB.nrosReservados!=='object')DB.nrosReservados={};
   provs.forEach(prov=>{
     const items=elegidas.filter(e=>e.prov===prov);
     const total=items.reduce((s,e)=>s+e.sub,0);
+    // si este proveedor viene de una orden reabierta, reuso su número original
+    const reservado=DB.nrosReservados[prov.toLowerCase()];
+    let nro;
+    if(reservado){
+      nro=reservado;
+      delete DB.nrosReservados[prov.toLowerCase()]; // ya lo usé
+    }else{
+      nro=DB.ordenNro;
+      DB.ordenNro=++DB.ordenSeq; // solo avanza el contador para órdenes nuevas
+    }
     DB.cerrados.unshift({
-      id:uid(), nro:DB.ordenNro, ref, proveedor:prov,
+      id:uid(), nro, ref, proveedor:prov,
       fecha, tc:DB.tc, items, total,
       recibido:false, pasadoProv:ordenExportadaProv
     });
-    DB.ordenNro=++DB.ordenSeq;
   });
   return provs.length;
 }
@@ -1028,6 +1039,7 @@ document.getElementById('btnFinalizarPedido').onclick=()=>{
   ordenExportadaProv=false;
   DB.ordenRef='';
   DB.pedido=[]; DB.cots=[];
+  DB.nrosReservados={}; // limpiar reservas pendientes al finalizar
   DB.save();
   renderPedido();renderPiezas();renderBadge();renderCompra();renderCot();renderComp();
   alert(n?('Pedido finalizado. Se crearon '+n+' orden(es) y se limpió todo.'):'Pedido finalizado y todo limpio.');
@@ -1078,6 +1090,9 @@ function togglePasadoProv(id){
 function reabrirCerrado(id){
   const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
   if(!confirm('Reabrir esta orden la vuelve a poner como pedido en curso (se suma a lo que ya tengas, sin duplicar). ¿Seguir?'))return;
+  // recordar el número original de esta orden para ese proveedor, para reusarlo al cerrar
+  if(!DB.nrosReservados||typeof DB.nrosReservados!=='object')DB.nrosReservados={};
+  if(o.proveedor)DB.nrosReservados[o.proveedor.toLowerCase()]=o.nro;
   o.items.forEach(it=>{
     // buscar la pieza en el catálogo (o crearla si no está)
     let p=DB.piezas.find(x=>x.desc===it.desc&&x.codO===it.codO);
@@ -1103,8 +1118,22 @@ function reabrirCerrado(id){
 }
 function editarCerrado(id){
   const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
-  const nr=prompt('Nueva referencia para '+ordenCod(o.nro)+':',o.ref);
-  if(nr!==null){o.ref=nr.trim()||'(sin referencia)';DB.save();renderCerrados()}
+  // 1) editar el número de orden
+  const nuevoNroStr=prompt('Número de orden (solo el número, ej: 4 para OC-0004).\nActual: '+ordenCod(o.nro),o.nro);
+  if(nuevoNroStr!==null){
+    const nuevoNro=parseInt(nuevoNroStr);
+    if(isNaN(nuevoNro)||nuevoNro<1){
+      alert('Número inválido. Tiene que ser un número mayor o igual a 1.');
+    }else if(nuevoNro!==o.nro && DB.cerrados.some(x=>x.id!==id && x.nro===nuevoNro)){
+      alert('⚠ El número '+ordenCod(nuevoNro)+' ya lo tiene otra orden. Elegí otro.');
+    }else{
+      o.nro=nuevoNro;
+    }
+  }
+  // 2) editar la referencia
+  const nr=prompt('Referencia / nombre del pedido para '+ordenCod(o.nro)+':',o.ref);
+  if(nr!==null){o.ref=nr.trim()||'(sin referencia)';}
+  DB.save();renderCerrados();
 }
 function eliminarCerrado(id){
   const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
@@ -1459,6 +1488,7 @@ function redibujarTodo(){
 }
 function normalizar(){
   if(!Array.isArray(DB.piezas))DB.piezas=[];
+  if(!DB.nrosReservados||typeof DB.nrosReservados!=='object')DB.nrosReservados={};
   if(!Array.isArray(DB.pedido))DB.pedido=[];
   if(!Array.isArray(DB.cots))DB.cots=[];
   DB.cots.forEach(c=>{if(c.codigo!=='A'&&c.codigo!=='O')c.codigo='O';});
@@ -1519,7 +1549,8 @@ onValue(raizRef, snap=>{
       piezas:d.piezas||[], pedido:d.pedido||[], cots:d.cots||[],
       proveedores:d.proveedores||[], cerrados:d.cerrados||[],
       tc:d.tc||DB.tc, ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||(d.ordenSeq||1),
-      ordenRef:typeof d.ordenRef==='string'?d.ordenRef:''
+      ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'',
+      nrosReservados:(d.nrosReservados&&typeof d.nrosReservados==='object')?d.nrosReservados:{}
     });
     const antes=DB.pedido.length;
     normalizar();
