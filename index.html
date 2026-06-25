@@ -345,7 +345,7 @@
       <label class="btn ghost sm" style="cursor:pointer" title="Restaurar desde un archivo de copia">♻ Restaurar
         <input type="file" accept=".json" id="inputRestore" style="display:none">
       </label>
-      <button class="btn ghost sm" id="btnResetNro" title="Reinicia solo el número de orden a OC-0001, sin borrar nada más">🔢 Nº de orden a OC-0001</button>
+      <button class="btn ghost sm" id="btnResetNro" title="Elegí desde qué número arranca la próxima orden, sin borrar nada más">🔢 Cambiar Nº de próxima orden</button>
       <button class="btn danger sm" id="btnReiniciarTodo" title="Borra TODO y arranca de cero">🗑 Reiniciar todo</button>
     </div>
   </section>
@@ -1440,11 +1440,20 @@ document.getElementById('inputRestore').onchange=function(){
 /* ---------- reiniciar todo (borrar datos de prueba) ---------- */
 // reiniciar SOLO el número de orden a OC-0001 (no toca catálogo, proveedores, pedido ni cerrados)
 document.getElementById('btnResetNro').onclick=()=>{
-  if(!confirm('¿Reiniciar el número de orden a OC-0001?\n\nEsto NO borra el catálogo, ni proveedores, ni el pedido en curso, ni los pedidos cerrados. Solo cambia el número que tendrá la próxima orden.'))return;
-  DB.ordenSeq=1; DB.ordenNro=1;
+  const nroStr=prompt('¿Desde qué número querés que arranque la PRÓXIMA orden?\n\nEscribí solo el número (ej: 5 para que la próxima sea OC-0005).\n\nEsto NO borra nada, solo cambia el contador.',DB.ordenNro);
+  if(nroStr===null)return;
+  const nro=parseInt(nroStr);
+  if(isNaN(nro)||nro<1){alert('Número inválido. Tiene que ser 1 o mayor.');return;}
+  // avisar si ese número ya lo tiene una orden cerrada
+  const choca=DB.cerrados.some(o=>o.nro===nro);
+  let msg='La próxima orden será '+ordenCod(nro)+'.';
+  if(choca)msg+='\n\n⚠ OJO: ya tenés una orden cerrada con el número '+ordenCod(nro)+'. Si seguís, podrías repetir número. ¿Continuar igual?';
+  else msg+=' ¿Confirmás?';
+  if(!confirm(msg))return;
+  DB.ordenSeq=nro; DB.ordenNro=nro;
   DB.save();
   renderCompra();
-  alert('✅ Listo. La próxima orden será OC-0001.');
+  alert('✅ Listo. La próxima orden será '+ordenCod(nro)+'.');
 };
 
 document.getElementById('btnReiniciarTodo').onclick=()=>{
