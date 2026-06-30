@@ -370,6 +370,7 @@
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancelar</button>
       <button class="btn" id="mGuardar">Guardar pieza</button>
+      <button class="btn amber" id="mGuardarPedido">Guardar y + Pedido</button>
     </div>
   </div>
 </div>
@@ -577,6 +578,7 @@ document.getElementById('btnNuevaPieza').onclick=()=>{
   editPiezaId=null;
   document.getElementById('modalPiezaTitle').textContent='Cargar pieza al catálogo';
   document.getElementById('mGuardar').textContent='Guardar pieza';
+  document.getElementById('mGuardarPedido').style.display=''; // visible al crear
   ['mMarca','mImpl','mCat','mDesc','mCodO','mCodA'].forEach(i=>document.getElementById(i).value='');
   modal.classList.add('open');
 };
@@ -585,21 +587,39 @@ function editPieza(id){
   editPiezaId=id;
   document.getElementById('modalPiezaTitle').textContent='Editar pieza';
   document.getElementById('mGuardar').textContent='Guardar cambios';
+  document.getElementById('mGuardarPedido').style.display='none'; // oculto al editar
   mMarca.value=p.marca;mImpl.value=p.impl;mCat.value=p.cat;mDesc.value=p.desc;mCodO.value=p.codO;mCodA.value=p.codA;
   modal.classList.add('open');
 }
 function closeModal(){modal.classList.remove('open')}
 modal.onclick=e=>{if(e.target===modal)closeModal()};
-document.getElementById('mGuardar').onclick=()=>{
+function guardarPiezaModal(){
   const datos={marca:mMarca.value.trim(),impl:mImpl.value.trim(),cat:mCat.value.trim(),
     desc:mDesc.value.trim(),codO:mCodO.value.trim(),codA:mCodA.value.trim()};
-  if(!datos.desc||!datos.marca){alert('Marca y descripción son obligatorias.');return}
+  if(!datos.desc||!datos.marca){alert('Marca y descripción son obligatorias.');return null}
+  let pid;
   if(editPiezaId){
-    const p=DB.piezas.find(x=>x.id===editPiezaId);Object.assign(p,datos);
+    const p=DB.piezas.find(x=>x.id===editPiezaId);Object.assign(p,datos);pid=editPiezaId;
   }else{
-    DB.piezas.push({id:uid(),...datos});
+    pid=uid();
+    DB.piezas.push({id:pid,...datos});
   }
-  DB.save();refreshFilters();renderPiezas();renderPedido();renderBadge();closeModal();
+  DB.save();refreshFilters();renderPiezas();renderPedido();renderBadge();
+  return pid;
+}
+document.getElementById('mGuardar').onclick=()=>{
+  const pid=guardarPiezaModal();
+  if(pid)closeModal();
+};
+document.getElementById('mGuardarPedido').onclick=()=>{
+  const pid=guardarPiezaModal();
+  if(pid){
+    if(!DB.pedido.some(x=>x.piezaId===pid)){
+      DB.pedido.push({piezaId:pid,qty:1,provs:[]});
+      DB.save();renderPiezas();renderPedido();renderBadge();
+    }
+    closeModal();
+  }
 };
 const mMarca=document.getElementById('mMarca'),mImpl=document.getElementById('mImpl'),mCat=document.getElementById('mCat'),
       mDesc=document.getElementById('mDesc'),mCodO=document.getElementById('mCodO'),mCodA=document.getElementById('mCodA');
@@ -1036,6 +1056,7 @@ document.getElementById('btnCerrarParcial').onclick=()=>{
     return tieneCots||tieneProvs||tieneElegidas; // si no tiene nada, se va
   });
   ordenExportadaProv=false;
+  if(!DB.pedido.length)DB.ordenRef=''; // si ya no queda nada pendiente, limpiar la referencia
   DB.save();
   renderPedido();renderPiezas();renderBadge();renderCompra();renderCot();renderComp();
   alert('Listo. Se cerraron '+n+' orden(es). El resto sigue disponible en Cotizaciones y Comparativo.');
