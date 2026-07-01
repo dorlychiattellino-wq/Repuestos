@@ -397,6 +397,7 @@
     </div>
     <div class="field"><label>Cotizó por</label>
       <select id="ec-codigo"><option value="O">Cód. original</option><option value="A">Cód. alternativo</option></select></div>
+    <div class="field"><label>Detalle (opcional)</label><input id="ec-detalle" placeholder="Ej: marca alternativa, importado..."></div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="cerrarModalCot()">Cancelar</button>
       <button class="btn" id="ec-guardar">Guardar cambios</button>
@@ -771,7 +772,7 @@ function renderCot(){
       <table><thead><tr><th>Proveedor</th><th>Precio</th><th>Moneda</th><th>IVA</th><th>Alíc.</th><th>Dto</th><th>Pago</th><th>Cód. cotizado</th><th class="right">ARS final/u</th><th></th></tr></thead>
       <tbody>
       ${cots.length?cots.map(c=>`<tr>
-        <td>${c.prov}</td>
+        <td>${c.prov}${c.detalle?`<br><span style="color:var(--green-bright);font-size:11px">📋 ${c.detalle}</span>`:''}</td>
         <td class="price">${Number(c.precio).toLocaleString('es-AR')}</td>
         <td><span class="flag ${c.moneda==='USD'?'usd':'ars'}">${c.moneda}</span></td>
         <td>${c.iva==='mas'?'+ IVA':'final'}</td>
@@ -797,6 +798,7 @@ function renderCot(){
           <div class="field"><label>Pago (días)</label><input id="cp-dias-${p.id}" type="number" placeholder="0" style="width:80px"></div>
           <div class="field"><label>Cotizó por</label>
             <select id="cp-codigo-${p.id}" class="mini"><option value="O">Cód. original</option><option value="A">Cód. alternativo</option></select></div>
+          <div class="field" style="flex:2;min-width:160px"><label>Detalle (opcional)</label><input id="cp-detalle-${p.id}" placeholder="Ej: marca alternativa, importado, remanufacturado..."></div>
           <button class="btn sm" onclick="addCot('${p.id}')">+ Agregar cotización</button>
         </div>
       </div>
@@ -814,7 +816,8 @@ function addCot(piezaId){
     alic:document.getElementById('cp-alic-'+piezaId).value,
     dto:Number(document.getElementById('cp-dto-'+piezaId).value)||0,
     dias:Number(document.getElementById('cp-dias-'+piezaId).value)||0,
-    codigo:document.getElementById('cp-codigo-'+piezaId).value||'O'});
+    codigo:document.getElementById('cp-codigo-'+piezaId).value||'O',
+    detalle:document.getElementById('cp-detalle-'+piezaId).value.trim()});
   DB.save();renderCot();
 }
 // editar una cotización existente (modal)
@@ -830,6 +833,7 @@ function editarCot(id){
   document.getElementById('ec-dto').value=Number(c.dto)||'';
   document.getElementById('ec-dias').value=Number(c.dias)||'';
   document.getElementById('ec-codigo').value=c.codigo||'O';
+  document.getElementById('ec-detalle').value=c.detalle||'';
   document.getElementById('modalCot').classList.add('open');
 }
 function cerrarModalCot(){document.getElementById('modalCot').classList.remove('open');cotEditId=null;}
@@ -847,6 +851,7 @@ document.getElementById('ec-guardar').onclick=()=>{
   c.dto=Number(document.getElementById('ec-dto').value)||0;
   c.dias=Number(document.getElementById('ec-dias').value)||0;
   c.codigo=document.getElementById('ec-codigo').value||'O';
+  c.detalle=document.getElementById('ec-detalle').value.trim();
   if(!DB.proveedores.some(x=>x.toLowerCase()===prov.toLowerCase()))DB.proveedores.push(prov);
   DB.save();cerrarModalCot();renderCot();renderComp();renderCompra();
 }
@@ -880,7 +885,7 @@ function renderComp(){
         const elegido=it.chosenList.some(x=>x.cotId===c.id);
         const tieneDto=Number(c.dto)>0;
         return `<tr class="${best?'best-row':''}">
-          <td>${c.prov} ${best?'<span class="tag-best">Mejor precio</span>':''}</td>
+          <td>${c.prov} ${best?'<span class="tag-best">Mejor precio</span>':''}${c.detalle?`<br><span style="color:var(--green-bright);font-size:11px">📋 ${c.detalle}</span>`:''}</td>
           <td class="mono">${(c.codigo||'O')==='A'?'ALT: ':'ORIG: '}${codigoCotizado(p,c)||'—'}</td>
           <td class="right price ${best?'win':''}">${precioDual(c)}${tieneDto?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${c.moneda==='USD'?('USD '+(toArsBruto(c)/DB.tc).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})):fmt(toArsBruto(c))}</span>`:''}</td>
           <td>${tieneDto?Number(c.dto)+'%':'—'}</td>
@@ -935,7 +940,7 @@ function elegidasActuales(){
       const uUsd=(c.moneda==='USD')?precioFinalMoneda(c):null;
       out.push({piezaId:it.piezaId,cotId:c.id,desc:p.desc,impl:p.impl||'',marca:p.marca||'',codO:p.codO||'',codA:p.codA||'',cat:p.cat||'',
         codCotizado:codigoCotizado(p,c),tipoCod:(c.codigo||'O'),
-        prov:c.prov,qty:q,u,sub:u*q,uUsd,subUsd:uUsd!=null?uUsd*q:null,
+        prov:c.prov,qty:q,u,sub:u*q,uUsd,subUsd:uUsd!=null?uUsd*q:null,detalle:c.detalle||'',
         precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21',
         dto:Number(c.dto)||0,dias:Number(c.dias)||0});
     });
@@ -979,7 +984,7 @@ function renderCompra(){
     stats.innerHTML='';document.getElementById('compraTotal').textContent='$0';document.getElementById('compraNota').textContent='';
   }else{
     tb.innerHTML=elegidas.map(e=>`<tr>
-      <td>${e.desc}${e.impl?`<br><span style="color:var(--muted);font-size:12px">${e.impl}</span>`:''}</td><td class="mono">${e.tipoCod==='A'?'ALT: ':'ORIG: '}${e.codCotizado||'—'}</td>
+      <td>${e.desc}${e.impl?`<br><span style="color:var(--muted);font-size:12px">${e.impl}</span>`:''}${e.detalle?`<br><span style="color:var(--green-bright);font-size:11px">📋 ${e.detalle}</span>`:''}</td><td class="mono">${e.tipoCod==='A'?'ALT: ':'ORIG: '}${e.codCotizado||'—'}</td>
       <td>${e.prov}</td><td class="right"><input class="qty" type="number" min="1" value="${e.qty}" onchange="setQtyCompra('${e.piezaId}','${e.cotId}',this.value)"></td>
       <td class="right price">${e.uUsd!=null?`<span class="flag usd" style="margin-right:3px">USD</span>${e.uUsd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}<br><span style="color:var(--muted);font-size:11px">≈ ${fmt(e.u)}</span>`:fmt(e.u)}</td><td class="right price win">${e.subUsd!=null?`<span class="flag usd" style="margin-right:3px">USD</span>${e.subUsd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}<br><span style="color:var(--muted);font-size:11px">≈ ${fmt(e.sub)}</span>`:fmt(e.sub)}</td></tr>`).join('');
     const total=elegidas.reduce((s,e)=>s+e.sub,0);
@@ -1316,7 +1321,7 @@ function exportarPDFCompra(items,suf){
   doc.autoTable({
     startY:y+2,
     head:[['Marca','Pieza','Implemento','Código','Proveedor','Cant.']],
-    body:items.map(e=>[e.marca||'',e.desc,e.impl||'',(e.codCotizado?e.codCotizado+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),e.prov,String(e.qty)]),
+    body:items.map(e=>[e.marca||'',e.desc+(e.detalle?' — '+e.detalle:''),e.impl||'',(e.codCotizado?e.codCotizado+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),e.prov,String(e.qty)]),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
@@ -1370,7 +1375,8 @@ function filaProv(e,fecha,descPpto){
   // se manda el PRECIO DE LISTA (sin descuento); el descuento lo aplica la app de Proveedores
   const precioLista=Number(e.precio);
   const dtoPct=dto; // para que Proveedores sepa cuánto descontar
-  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),e.desc,(e.codCotizado!==undefined?e.codCotizado:(e.codO||'')),e.qty,precioLista,Number(e.dias)||'',obs,dtoPct];
+  const descItem=e.desc+(e.detalle?' — '+e.detalle:'');
+  return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),descItem,(e.codCotizado!==undefined?e.codCotizado:(e.codO||'')),e.qty,precioLista,Number(e.dias)||'',obs,dtoPct];
 }
 function exportarProveedores(porProveedor){
   const items=elegidasActuales();
@@ -1519,7 +1525,7 @@ function pdfCerrado(id){
   doc.autoTable({
     startY:y+2,
     head:[['Marca','Pieza','Implemento','Código','Cant.']],
-    body:o.items.map(e=>{const cod=e.codCotizado!==undefined?e.codCotizado:(e.codO||'');return [e.marca||'',e.desc,e.impl||'',(cod?cod+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),String(e.qty)];}),
+    body:o.items.map(e=>{const cod=e.codCotizado!==undefined?e.codCotizado:(e.codO||'');return [e.marca||'',e.desc+(e.detalle?' — '+e.detalle:''),e.impl||'',(cod?cod+(e.tipoCod==='A'?' (Alternativo)':' (Original)'):''),String(e.qty)];}),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
