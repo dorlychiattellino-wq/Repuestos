@@ -1089,6 +1089,11 @@ document.getElementById('btnFinalizarPedido').onclick=()=>{
   alert(n?('Pedido finalizado. Se crearon '+n+' orden(es) y se limpió todo.'):'Pedido finalizado y todo limpio.');
 };
 
+let cerradosAbiertos=new Set(); // ids de órdenes con el detalle desplegado
+function toggleDetalleCerrado(id){
+  if(cerradosAbiertos.has(id))cerradosAbiertos.delete(id);else cerradosAbiertos.add(id);
+  renderCerrados();
+}
 function renderCerrados(){
   const tb=document.querySelector('#tblCerrados tbody');
   if(!DB.cerrados.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty">Todavía no cerraste ningún pedido.</div></td></tr>`;return}
@@ -1100,19 +1105,20 @@ function renderCerrados(){
   });
   tb.innerHTML=orden.map(o=>{
     const completo=o.recibido&&o.pasadoProv;
+    const abierto=cerradosAbiertos.has(o.id);
     const etiqRec=o.recibido
       ? '<span class="flag ars" style="background:#15331f;color:#6fd38a">✓ Recibido</span>'
       : '<span class="flag" style="background:#33270f;color:var(--amber)">⚠ Sin recibir</span>';
     const etiqProv=o.pasadoProv
       ? '<span class="flag ars" style="background:#15331f;color:#6fd38a">✓ En Proveedores</span>'
       : '<span class="flag" style="background:#33270f;color:var(--amber)">⚠ No pasado a Prov.</span>';
-    return `<tr style="${completo?'':'background:rgba(230,164,23,.06)'}">
-    <td class="mono" style="color:var(--green-bright)">${ordenCod(o.nro)}</td>
+    let fila=`<tr style="cursor:pointer;${completo?'':'background:rgba(230,164,23,.06)'}" onclick="toggleDetalleCerrado('${o.id}')" title="Tocá para ${abierto?'ocultar':'ver'} las piezas">
+    <td class="mono" style="color:var(--green-bright)">${abierto?'▾':'▸'} ${ordenCod(o.nro)}</td>
     <td>${o.proveedor?`<b>${o.proveedor}</b><br><span style="color:var(--muted);font-size:12px">${o.ref}</span>`:o.ref}<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">${etiqRec}${etiqProv}</div></td>
     <td>${o.fecha}</td>
     <td class="right">${o.items.length}</td>
     <td class="right price">${fmt(o.total)}</td>
-    <td class="right" style="white-space:nowrap">
+    <td class="right" style="white-space:nowrap" onclick="event.stopPropagation()">
       <button class="btn ghost sm" onclick="toggleRecibido('${o.id}')" title="Marcar recibido / sin recibir">📦</button>
       <button class="btn ghost sm" onclick="togglePasadoProv('${o.id}')" title="Marcar pasado a Proveedores / no">📤</button>
       <button class="btn ghost sm" onclick="csvCerradoProv('${o.id}')" title="CSV para Proveedores">📥</button>
@@ -1121,6 +1127,32 @@ function renderCerrados(){
       <button class="btn ghost sm" onclick="pdfCerrado('${o.id}')" title="PDF">📄</button>
       <button class="btn danger sm" onclick="eliminarCerrado('${o.id}')" title="Eliminar">✕</button>
     </td></tr>`;
+    if(abierto){
+      const filasItems=(o.items||[]).map(e=>{
+        const cod=e.codCotizado!==undefined?e.codCotizado:(e.codO||'');
+        const codTxt=cod?(cod+(e.tipoCod==='A'?' (Alt.)':' (Orig.)')):'—';
+        const precio=(e.uUsd!=null)
+          ? `<span class="flag usd" style="margin-right:3px">USD</span>${Number(e.uUsd).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}`
+          : fmt(e.u||0);
+        const sub=(e.subUsd!=null)
+          ? `<span class="flag usd" style="margin-right:3px">USD</span>${Number(e.subUsd).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}`
+          : fmt(e.sub||0);
+        return `<tr>
+          <td>${e.desc||''}${e.impl?`<br><span style="color:var(--muted);font-size:11px">${e.impl}</span>`:''}${e.detalle?`<br><span style="color:var(--green-bright);font-size:11px">📋 ${e.detalle}</span>`:''}</td>
+          <td class="mono" style="font-size:12px">${codTxt}</td>
+          <td class="right">${e.qty||0}</td>
+          <td class="right price">${precio}</td>
+          <td class="right price">${sub}</td>
+        </tr>`;
+      }).join('');
+      fila+=`<tr><td colspan="6" style="padding:0 12px 14px 28px;background:rgba(255,255,255,.02)">
+        <table style="width:100%;font-size:13px">
+          <thead><tr><th>Pieza</th><th>Código</th><th class="right">Cant.</th><th class="right">Precio/u</th><th class="right">Subtotal</th></tr></thead>
+          <tbody>${filasItems||`<tr><td colspan="5" style="color:var(--muted)">Sin piezas.</td></tr>`}</tbody>
+        </table>
+      </td></tr>`;
+    }
+    return fila;
   }).join('');
 }
 function toggleRecibido(id){
@@ -1631,7 +1663,7 @@ Object.assign(window,{
   editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty,
   asignarProvPedido, quitarProvPedido, generarPDFProveedor,
   togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen, exportarPDFCompraProv,
-  editarCot, cerrarModalCot, toggleRecibido, togglePasadoProv, csvCerradoProv
+  editarCot, cerrarModalCot, toggleRecibido, togglePasadoProv, csvCerradoProv, toggleDetalleCerrado
 });
 </script>
 </body>
