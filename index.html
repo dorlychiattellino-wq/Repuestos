@@ -393,6 +393,7 @@
     </div>
     <div class="grid-2">
       <div class="field"><label>Dto %</label><input id="ec-dto" type="number" step="0.01"></div>
+      <div class="field"><label>Dto 2 %</label><input id="ec-dto2" type="number" step="0.01"></div>
       <div class="field"><label>Pago (días)</label><input id="ec-dias" type="number"></div>
     </div>
     <div class="field"><label>Cotizó por</label>
@@ -724,14 +725,24 @@ function toArsBruto(c){
 function toArsFinal(c){
   const bruto=toArsBruto(c);
   const dto=Number(c.dto)||0;
-  return bruto*(1-dto/100);
+  const dto2=Number(c.dto2)||0; // segundo descuento en cascada
+  return bruto*(1-dto/100)*(1-dto2/100);
 }
 // precio FINAL por unidad en la MONEDA ORIGINAL (USD o ARS), con IVA y dto aplicados
 function precioFinalMoneda(c){
   let base=Number(c.precio)||0;
   if(c.iva==='mas'){const al=c.alic==='105'?1.105:1.21;base=base*al;}
   const dto=Number(c.dto)||0;
-  return base*(1-dto/100);
+  const dto2=Number(c.dto2)||0; // segundo descuento en cascada
+  return base*(1-dto/100)*(1-dto2/100);
+}
+// texto de descuento: "10% + 10%" si hay doble, "10%" si hay uno, "—" si nada
+function dtoTxt(c){
+  const d1=Number(c.dto)||0,d2=Number(c.dto2)||0;
+  if(d1&&d2)return d1+'% + '+d2+'%';
+  if(d1)return d1+'%';
+  if(d2)return d2+'%';
+  return '—';
 }
 // arma el HTML del precio para mostrar: si es USD, destaca U$D y agrega los $ de referencia (al TC actual)
 function precioDual(c){
@@ -777,10 +788,10 @@ function renderCot(){
         <td><span class="flag ${c.moneda==='USD'?'usd':'ars'}">${c.moneda}</span></td>
         <td>${c.iva==='mas'?'+ IVA':'final'}</td>
         <td>${c.iva==='mas'?(c.alic==='105'?'10,5%':'21%'):'—'}</td>
-        <td>${Number(c.dto)?Number(c.dto)+'%':'—'}</td>
+        <td>${dtoTxt(c)}</td>
         <td>${Number(c.dias)?Number(c.dias)+' d':'—'}</td>
         <td class="mono">${(c.codigo||'O')==='A'?'ALT: ':'ORIG: '}${codigoCotizado(p,c)||'—'}</td>
-        <td class="right price">${fmt(toArsFinal(c))}${Number(c.dto)?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${fmt(toArsBruto(c))}</span>`:''}</td>
+        <td class="right price">${fmt(toArsFinal(c))}${(Number(c.dto)||Number(c.dto2))?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${fmt(toArsBruto(c))}</span>`:''}</td>
         <td class="right" style="white-space:nowrap"><button class="btn ghost sm" onclick="editarCot('${c.id}')" title="Editar cotización">✎</button> <button class="btn danger sm" onclick="delCot('${c.id}')">✕</button></td>
       </tr>`).join(''):`<tr><td colspan="10" style="color:var(--muted)">Sin cotizaciones cargadas.</td></tr>`}
       </tbody></table></div>
@@ -795,6 +806,7 @@ function renderCot(){
           <div class="field"><label>Alícuota</label>
             <select id="cp-alic-${p.id}" class="mini"><option value="21">21%</option><option value="105">10,5%</option></select></div>
           <div class="field"><label>Dto %</label><input id="cp-dto-${p.id}" type="number" step="0.01" placeholder="0" style="width:70px"></div>
+          <div class="field"><label>Dto 2 %</label><input id="cp-dto2-${p.id}" type="number" step="0.01" placeholder="0" style="width:70px" title="Segundo descuento en cascada (se aplica sobre el precio ya descontado)"></div>
           <div class="field"><label>Pago (días)</label><input id="cp-dias-${p.id}" type="number" placeholder="0" style="width:80px"></div>
           <div class="field"><label>Cotizó por</label>
             <select id="cp-codigo-${p.id}" class="mini"><option value="O">Cód. original</option><option value="A">Cód. alternativo</option></select></div>
@@ -815,6 +827,7 @@ function addCot(piezaId){
     iva:document.getElementById('cp-iva-'+piezaId).value,
     alic:document.getElementById('cp-alic-'+piezaId).value,
     dto:Number(document.getElementById('cp-dto-'+piezaId).value)||0,
+    dto2:Number(document.getElementById('cp-dto2-'+piezaId).value)||0,
     dias:Number(document.getElementById('cp-dias-'+piezaId).value)||0,
     codigo:document.getElementById('cp-codigo-'+piezaId).value||'O',
     detalle:document.getElementById('cp-detalle-'+piezaId).value.trim()});
@@ -831,6 +844,7 @@ function editarCot(id){
   document.getElementById('ec-iva').value=c.iva||'final';
   document.getElementById('ec-alic').value=c.alic||'21';
   document.getElementById('ec-dto').value=Number(c.dto)||'';
+  document.getElementById('ec-dto2').value=Number(c.dto2)||'';
   document.getElementById('ec-dias').value=Number(c.dias)||'';
   document.getElementById('ec-codigo').value=c.codigo||'O';
   document.getElementById('ec-detalle').value=c.detalle||'';
@@ -849,6 +863,7 @@ document.getElementById('ec-guardar').onclick=()=>{
   c.iva=document.getElementById('ec-iva').value;
   c.alic=document.getElementById('ec-alic').value;
   c.dto=Number(document.getElementById('ec-dto').value)||0;
+  c.dto2=Number(document.getElementById('ec-dto2').value)||0;
   c.dias=Number(document.getElementById('ec-dias').value)||0;
   c.codigo=document.getElementById('ec-codigo').value||'O';
   c.detalle=document.getElementById('ec-detalle').value.trim();
@@ -883,12 +898,12 @@ function renderComp(){
       <tbody>${cots.map(c=>{
         const best=c.ars===min;
         const elegido=it.chosenList.some(x=>x.cotId===c.id);
-        const tieneDto=Number(c.dto)>0;
+        const tieneDto=(Number(c.dto)>0)||(Number(c.dto2)>0);
         return `<tr class="${best?'best-row':''}">
           <td>${c.prov} ${best?'<span class="tag-best">Mejor precio</span>':''}${c.detalle?`<br><span style="color:var(--green-bright);font-size:11px">📋 ${c.detalle}</span>`:''}</td>
           <td class="mono">${(c.codigo||'O')==='A'?'ALT: ':'ORIG: '}${codigoCotizado(p,c)||'—'}</td>
           <td class="right price ${best?'win':''}">${precioDual(c)}${tieneDto?`<br><span style="color:var(--muted);font-size:11px;text-decoration:line-through">${c.moneda==='USD'?('USD '+(toArsBruto(c)/DB.tc).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})):fmt(toArsBruto(c))}</span>`:''}</td>
-          <td>${tieneDto?Number(c.dto)+'%':'—'}</td>
+          <td>${dtoTxt(c)}</td>
           <td>${Number(c.dias)?Number(c.dias)+' d':'—'}</td>
           <td>${best?'✅':'—'}</td>
           <td class="right">
@@ -942,7 +957,7 @@ function elegidasActuales(){
         codCotizado:codigoCotizado(p,c),tipoCod:(c.codigo||'O'),
         prov:c.prov,qty:q,u,sub:u*q,uUsd,subUsd:uUsd!=null?uUsd*q:null,detalle:c.detalle||'',
         precio:Number(c.precio)||0,moneda:c.moneda||'ARS',iva:c.iva||'final',alic:c.alic||'21',
-        dto:Number(c.dto)||0,dias:Number(c.dias)||0});
+        dto:Number(c.dto)||0,dto2:Number(c.dto2)||0,dias:Number(c.dias)||0});
     });
   });
   return out;
@@ -1175,7 +1190,17 @@ function reabrirCerrado(id){
     if(!p){p={id:uid(),marca:it.marca||'',impl:it.impl||'',cat:it.cat||'',desc:it.desc,codO:it.codO,codA:it.codA};DB.piezas.push(p);}
     // crear la cotización de ese proveedor
     const cId=uid();
-    DB.cots.push({id:cId,piezaId:p.id,prov:it.prov,precio:it.u,moneda:'ARS',iva:'final',alic:'21',dto:0,dias:Number(it.dias)||0,codigo:it.tipoCod||'O'});
+    // restaurar la cotización con TODOS sus datos originales (precio de lista, moneda, IVA, dto, detalle)
+    // las órdenes viejas que no guardaban el precio original caen al precio final en ARS como antes
+    const tieneOrig=(it.precio!==undefined&&it.precio!==null&&Number(it.precio)>0);
+    DB.cots.push({id:cId,piezaId:p.id,prov:it.prov,
+      precio:tieneOrig?Number(it.precio):it.u,
+      moneda:tieneOrig?(it.moneda||'ARS'):'ARS',
+      iva:tieneOrig?(it.iva||'final'):'final',
+      alic:tieneOrig?(it.alic||'21'):'21',
+      dto:tieneOrig?(Number(it.dto)||0):0,
+      dto2:tieneOrig?(Number(it.dto2)||0):0,
+      dias:Number(it.dias)||0,codigo:it.tipoCod||'O',detalle:it.detalle||''});
     // buscar si la pieza YA está en el pedido; si está, fusiono; si no, la agrego
     let ped=DB.pedido.find(x=>x.piezaId===p.id);
     if(!ped){
@@ -1402,11 +1427,17 @@ function ivaProveedores(e){
 // columnas pensadas para que el importador de la app de Proveedores las lea directo
 const HEAD_PROV=['proveedor','fecha','descripcion','moneda','tipoIva','item_desc','item_codigo','cantidad','precio_unit','validez','observaciones','descuento'];
 function filaProv(e,fecha,descPpto){
-  const dto=Number(e.dto)||0;
-  const obs=dto?('Descuento '+dto+'% aplicado - Lista: '+e.moneda+' '+Number(e.precio).toLocaleString('es-AR')):'';
+  const d1=Number(e.dto)||0;
+  const d2=Number(e.dto2)||0;
+  // descuento combinado equivalente: 10% + 10% en cascada = 19% (0,9×0,9=0,81)
+  // Proveedores aplica UNA vez lista×(1−dto/100), así que le mando el equivalente
+  const dtoEf=Math.round((1-(1-d1/100)*(1-d2/100))*100*10000)/10000;
+  let obs='';
+  if(d1&&d2)obs='Descuento '+d1+'% + '+d2+'% (equivale a '+dtoEf+'%) aplicado - Lista: '+e.moneda+' '+Number(e.precio).toLocaleString('es-AR');
+  else if(dtoEf)obs='Descuento '+dtoEf+'% aplicado - Lista: '+e.moneda+' '+Number(e.precio).toLocaleString('es-AR');
   // se manda el PRECIO DE LISTA (sin descuento); el descuento lo aplica la app de Proveedores
   const precioLista=Number(e.precio);
-  const dtoPct=dto; // para que Proveedores sepa cuánto descontar
+  const dtoPct=dtoEf; // para que Proveedores sepa cuánto descontar (una sola vez)
   const descItem=e.desc+(e.detalle?' — '+e.detalle:'');
   return[e.prov,fecha,descPpto,e.moneda,ivaProveedores(e),descItem,(e.codCotizado!==undefined?e.codCotizado:(e.codO||'')),e.qty,precioLista,Number(e.dias)||'',obs,dtoPct];
 }
