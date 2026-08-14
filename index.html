@@ -329,6 +329,14 @@
       </div>
       <button class="btn ghost" id="btnCsvCerradosPend" title="Generar CSV de todas las pendientes">📥 CSV pendientes a Proveedores</button>
     </div>
+    <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:14px">
+      <div class="field"><label>Filtrar por proveedor</label>
+        <select id="fCerradosProv"><option value="">Todos los proveedores</option></select></div>
+      <div class="card" style="padding:10px 16px;display:flex;flex-direction:column;gap:2px;border-color:var(--amber)">
+        <span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Total sin pasar a Proveedores</span>
+        <span id="totalPendProv" class="price" style="font-size:20px;color:var(--amber)">$0</span>
+      </div>
+    </div>
     <div class="card" style="padding:0;overflow:auto;margin-top:14px">
       <table id="tblCerrados">
         <thead><tr>
@@ -1111,13 +1119,25 @@ function toggleDetalleCerrado(id){
 }
 function renderCerrados(){
   const tb=document.querySelector('#tblCerrados tbody');
+  // llenar el filtro de proveedores conservando la selección
+  const selProv=document.getElementById('fCerradosProv');
+  const provsCer=uniq(DB.cerrados.map(o=>o.proveedor).filter(Boolean));
+  const selPrev=selProv.value;
+  selProv.innerHTML='<option value="">Todos los proveedores</option>'+provsCer.map(v=>`<option>${v}</option>`).join('');
+  if(selPrev&&provsCer.includes(selPrev))selProv.value=selPrev;
+  const filtro=selProv.value;
+  // total de las órdenes SIN pasar a Proveedores (del proveedor filtrado, o de todos)
+  const pendientes=DB.cerrados.filter(o=>!o.pasadoProv&&(!filtro||o.proveedor===filtro));
+  const totalPend=pendientes.reduce((s,o)=>s+(Number(o.total)||0),0);
+  document.getElementById('totalPendProv').textContent=fmt(totalPend)+(pendientes.length?' ('+pendientes.length+' orden'+(pendientes.length>1?'es':'')+')':'');
   if(!DB.cerrados.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty">Todavía no cerraste ningún pedido.</div></td></tr>`;return}
   // pendientes primero (los que no están recibidos o no están pasados a proveedores)
-  const orden=[...DB.cerrados].sort((a,b)=>{
+  const orden=[...DB.cerrados].filter(o=>!filtro||o.proveedor===filtro).sort((a,b)=>{
     const pa=(a.recibido&&a.pasadoProv)?1:0;
     const pb=(b.recibido&&b.pasadoProv)?1:0;
     return pa-pb; // incompletos (0) arriba
   });
+  if(!orden.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty">No hay órdenes de ese proveedor.</div></td></tr>`;return}
   tb.innerHTML=orden.map(o=>{
     const completo=o.recibido&&o.pasadoProv;
     const abierto=cerradosAbiertos.has(o.id);
@@ -1491,6 +1511,7 @@ function csvCerradosPendientes(){
   DB.save();renderCerrados();
 }
 document.getElementById('btnCsvCerradosPend').onclick=csvCerradosPendientes;
+document.getElementById('fCerradosProv').onchange=renderCerrados;
 
 /* ---------- copia de seguridad / restaurar ---------- */
 document.getElementById('btnBackup').onclick=()=>{
