@@ -1113,9 +1113,12 @@ document.getElementById('btnFinalizarPedido').onclick=()=>{
 };
 
 let cerradosAbiertos=new Set(); // ids de órdenes con el detalle desplegado
-let pendExcluidos=new Set(); // ids de órdenes pendientes DESTILDADAS (excluidas de la suma)
+// órdenes pendientes DESTILDADAS (excluidas de la suma); se guarda en este dispositivo
+let pendExcluidos=new Set();
+try{pendExcluidos=new Set(JSON.parse(localStorage.getItem('agrorep_pend_excluidos')||'[]'));}catch(e){}
 function togglePendSuma(id){
   if(pendExcluidos.has(id))pendExcluidos.delete(id);else pendExcluidos.add(id);
+  try{localStorage.setItem('agrorep_pend_excluidos',JSON.stringify([...pendExcluidos]));}catch(e){}
   renderCerrados();
 }
 function toggleDetalleCerrado(id){
@@ -1124,13 +1127,19 @@ function toggleDetalleCerrado(id){
 }
 function renderCerrados(){
   const tb=document.querySelector('#tblCerrados tbody');
-  // llenar el filtro de proveedores conservando la selección
+  // llenar el filtro de proveedores; la selección se guarda en este dispositivo
   const selProv=document.getElementById('fCerradosProv');
   const provsCer=uniq(DB.cerrados.map(o=>o.proveedor).filter(Boolean));
-  const selPrev=selProv.value;
+  let guardado='';
+  try{guardado=localStorage.getItem('agrorep_filtro_cerrados')||'';}catch(e){}
   selProv.innerHTML='<option value="">Todos los proveedores</option>'+provsCer.map(v=>`<option>${v}</option>`).join('');
-  if(selPrev&&provsCer.includes(selPrev))selProv.value=selPrev;
+  if(guardado&&provsCer.includes(guardado))selProv.value=guardado;
   const filtro=selProv.value;
+  // limpiar destildados guardados de órdenes que ya no existen o ya pasaron a Proveedores
+  const idsPendActuales=new Set(DB.cerrados.filter(o=>!o.pasadoProv).map(o=>o.id));
+  let cambioExcl=false;
+  [...pendExcluidos].forEach(id=>{if(!idsPendActuales.has(id)){pendExcluidos.delete(id);cambioExcl=true;}});
+  if(cambioExcl){try{localStorage.setItem('agrorep_pend_excluidos',JSON.stringify([...pendExcluidos]));}catch(e){}}
   // total de las órdenes SIN pasar a Proveedores (del proveedor filtrado, o de todos)
   // solo suma las que están TILDADAS (todas arrancan tildadas; destildá para excluir)
   const pendientes=DB.cerrados.filter(o=>!o.pasadoProv&&(!filtro||o.proveedor===filtro));
@@ -1518,7 +1527,14 @@ function csvCerradosPendientes(){
   DB.save();renderCerrados();
 }
 document.getElementById('btnCsvCerradosPend').onclick=csvCerradosPendientes;
-document.getElementById('fCerradosProv').onchange=renderCerrados;
+document.getElementById('fCerradosProv').onchange=function(){
+  try{localStorage.setItem('agrorep_filtro_cerrados',this.value);}catch(e){}
+  if(!this.value){ // al limpiar el filtro (Todos los proveedores), todas vuelven a quedar tildadas
+    pendExcluidos=new Set();
+    try{localStorage.setItem('agrorep_pend_excluidos','[]');}catch(e){}
+  }
+  renderCerrados();
+};
 
 /* ---------- copia de seguridad / restaurar ---------- */
 document.getElementById('btnBackup').onclick=()=>{
