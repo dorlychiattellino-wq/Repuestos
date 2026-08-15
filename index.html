@@ -612,7 +612,7 @@ function guardarPiezaModal(){
     const p=DB.piezas.find(x=>x.id===editPiezaId);Object.assign(p,datos);pid=editPiezaId;
   }else{
     pid=uid();
-    DB.piezas.push({id:pid,...datos});
+    DB.piezas.unshift({id:pid,...datos}); // la pieza nueva va arriba de todo
   }
   DB.save();refreshFilters();renderPiezas();renderPedido();renderBadge();
   return pid;
@@ -1113,6 +1113,11 @@ document.getElementById('btnFinalizarPedido').onclick=()=>{
 };
 
 let cerradosAbiertos=new Set(); // ids de órdenes con el detalle desplegado
+let pendExcluidos=new Set(); // ids de órdenes pendientes DESTILDADAS (excluidas de la suma)
+function togglePendSuma(id){
+  if(pendExcluidos.has(id))pendExcluidos.delete(id);else pendExcluidos.add(id);
+  renderCerrados();
+}
 function toggleDetalleCerrado(id){
   if(cerradosAbiertos.has(id))cerradosAbiertos.delete(id);else cerradosAbiertos.add(id);
   renderCerrados();
@@ -1127,9 +1132,11 @@ function renderCerrados(){
   if(selPrev&&provsCer.includes(selPrev))selProv.value=selPrev;
   const filtro=selProv.value;
   // total de las órdenes SIN pasar a Proveedores (del proveedor filtrado, o de todos)
+  // solo suma las que están TILDADAS (todas arrancan tildadas; destildá para excluir)
   const pendientes=DB.cerrados.filter(o=>!o.pasadoProv&&(!filtro||o.proveedor===filtro));
-  const totalPend=pendientes.reduce((s,o)=>s+(Number(o.total)||0),0);
-  document.getElementById('totalPendProv').textContent=fmt(totalPend)+(pendientes.length?' ('+pendientes.length+' orden'+(pendientes.length>1?'es':'')+')':'');
+  const sumadas=pendientes.filter(o=>!pendExcluidos.has(o.id));
+  const totalPend=sumadas.reduce((s,o)=>s+(Number(o.total)||0),0);
+  document.getElementById('totalPendProv').textContent=fmt(totalPend)+(pendientes.length?' ('+sumadas.length+' de '+pendientes.length+' orden'+(pendientes.length>1?'es':'')+')':'');
   if(!DB.cerrados.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty">Todavía no cerraste ningún pedido.</div></td></tr>`;return}
   // pendientes primero (los que no están recibidos o no están pasados a proveedores)
   const orden=[...DB.cerrados].filter(o=>!filtro||o.proveedor===filtro).sort((a,b)=>{
@@ -1152,7 +1159,7 @@ function renderCerrados(){
     <td>${o.proveedor?`<b>${o.proveedor}</b><br><span style="color:var(--muted);font-size:12px">${o.ref}</span>`:o.ref}<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">${etiqRec}${etiqProv}</div></td>
     <td>${o.fecha}</td>
     <td class="right">${o.items.length}</td>
-    <td class="right price">${fmt(o.total)}</td>
+    <td class="right price">${!o.pasadoProv?`<label onclick="event.stopPropagation()" title="Tildado = se suma en el total de arriba" style="cursor:pointer;margin-right:8px;display:inline-flex;align-items:center;gap:4px"><input type="checkbox" ${pendExcluidos.has(o.id)?'':'checked'} onchange="togglePendSuma('${o.id}')" style="accent-color:var(--amber);width:16px;height:16px;cursor:pointer"><span style="color:var(--amber);font-size:10px">Σ</span></label>`:''}${fmt(o.total)}</td>
     <td class="right" style="white-space:nowrap" onclick="event.stopPropagation()">
       <button class="btn ghost sm" onclick="toggleRecibido('${o.id}')" title="Marcar recibido / sin recibir">📦</button>
       <button class="btn ghost sm" onclick="togglePasadoProv('${o.id}')" title="Marcar pasado a Proveedores / no">📤</button>
@@ -1715,7 +1722,7 @@ Object.assign(window,{
   editPieza, editarCerrado, eliminarCerrado, pdfCerrado, reabrirCerrado, setQty,
   asignarProvPedido, quitarProvPedido, generarPDFProveedor,
   togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen, exportarPDFCompraProv,
-  editarCot, cerrarModalCot, toggleRecibido, togglePasadoProv, csvCerradoProv, toggleDetalleCerrado
+  editarCot, cerrarModalCot, toggleRecibido, togglePasadoProv, csvCerradoProv, toggleDetalleCerrado, togglePendSuma
 });
 </script>
 </body>
