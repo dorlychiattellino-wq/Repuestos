@@ -336,6 +336,7 @@
         <span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Total sin pasar a Proveedores</span>
         <span id="totalPendProv" class="price" style="font-size:20px;color:var(--amber)">$0</span>
       </div>
+      <button class="btn ghost sm" id="btnRetildar" title="Vuelve a tildar todas las órdenes pendientes para que se sumen">☑ Retildar todas</button>
     </div>
     <div class="card" style="padding:0;overflow:auto;margin-top:14px">
       <table id="tblCerrados">
@@ -531,17 +532,39 @@ function fillSelect(sel,vals,label){
   if(prev&&vals.includes(prev))sel.value=prev;
 }
 function refreshFilters(){
+  // filtros en cascada: marca → implementos de esa marca → categorías de ese implemento
   fillSelect(fMarca,uniq(DB.piezas.map(p=>p.marca)),'Todas las marcas');
-  fillSelect(fImpl,uniq(DB.piezas.map(p=>p.impl)),'Todos los implementos');
-  fillSelect(fCat,uniq(DB.piezas.map(p=>p.cat)),'Todas las categorías');
+  const m=fMarca.value;
+  const piezasM=m?DB.piezas.filter(p=>p.marca===m):DB.piezas;
+  fillSelect(fImpl,uniq(piezasM.map(p=>p.impl)),'Todos los implementos'); // si el impl elegido no es de esa marca, se limpia solo
+  const i=fImpl.value;
+  const piezasMI=i?piezasM.filter(p=>p.impl===i):piezasM;
+  fillSelect(fCat,uniq(piezasMI.map(p=>p.cat)),'Todas las categorías');
   dlMarca.innerHTML=uniq(DB.piezas.map(p=>p.marca)).map(v=>`<option>${v}</option>`).join('');
-  dlImpl.innerHTML=uniq(DB.piezas.map(p=>p.impl)).map(v=>`<option>${v}</option>`).join('');
+  refreshDlImpl();
   dlCat.innerHTML=uniq(DB.piezas.map(p=>p.cat)).map(v=>`<option>${v}</option>`).join('');
+}
+// sugerencias de implemento en el formulario de pieza: solo los de la marca escrita
+// (si la marca es nueva o no tiene implementos cargados, sugiere todos)
+function refreshDlImpl(){
+  const m=(document.getElementById('mMarca').value||'').trim().toLowerCase();
+  const todos=uniq(DB.piezas.map(p=>p.impl)).filter(Boolean);
+  let vals=todos;
+  if(m){
+    const deMarca=uniq(DB.piezas.filter(p=>(p.marca||'').trim().toLowerCase()===m).map(p=>p.impl)).filter(Boolean);
+    if(deMarca.length)vals=deMarca;
+  }
+  dlImpl.innerHTML=vals.map(v=>`<option>${v}</option>`).join('');
 }
 const fBuscar=document.getElementById('fBuscar'),fMarca=document.getElementById('fMarca'),
       fImpl=document.getElementById('fImpl'),fCat=document.getElementById('fCat'),
       dlMarca=document.getElementById('dlMarca'),dlImpl=document.getElementById('dlImpl'),dlCat=document.getElementById('dlCat');
-[fBuscar,fMarca,fImpl,fCat].forEach(e=>e.oninput=renderPiezas);
+fBuscar.oninput=renderPiezas;
+fCat.oninput=renderPiezas;
+// al cambiar marca o implemento, se recalculan los desplegables dependientes
+fMarca.onchange=()=>{refreshFilters();renderPiezas();};
+fImpl.onchange=()=>{refreshFilters();renderPiezas();};
+document.getElementById('mMarca').oninput=refreshDlImpl;
 
 /* ---------- catálogo ---------- */
 function piezasFiltradas(){
@@ -590,6 +613,7 @@ document.getElementById('btnNuevaPieza').onclick=()=>{
   document.getElementById('mGuardar').textContent='Guardar pieza';
   document.getElementById('mGuardarPedido').style.display=''; // visible al crear
   ['mMarca','mImpl','mCat','mDesc','mCodO','mCodA'].forEach(i=>document.getElementById(i).value='');
+  refreshDlImpl(); // sugerencias de implemento según la marca
   modal.classList.add('open');
 };
 function editPieza(id){
@@ -599,6 +623,7 @@ function editPieza(id){
   document.getElementById('mGuardar').textContent='Guardar cambios';
   document.getElementById('mGuardarPedido').style.display='none'; // oculto al editar
   mMarca.value=p.marca;mImpl.value=p.impl;mCat.value=p.cat;mDesc.value=p.desc;mCodO.value=p.codO;mCodA.value=p.codA;
+  refreshDlImpl(); // sugerencias de implemento según la marca
   modal.classList.add('open');
 }
 function closeModal(){modal.classList.remove('open')}
@@ -1527,6 +1552,11 @@ function csvCerradosPendientes(){
   DB.save();renderCerrados();
 }
 document.getElementById('btnCsvCerradosPend').onclick=csvCerradosPendientes;
+document.getElementById('btnRetildar').onclick=()=>{
+  pendExcluidos=new Set();
+  try{localStorage.setItem('agrorep_pend_excluidos','[]');}catch(e){}
+  renderCerrados();
+};
 document.getElementById('fCerradosProv').onchange=function(){
   try{localStorage.setItem('agrorep_filtro_cerrados',this.value);}catch(e){}
   if(!this.value){ // al limpiar el filtro (Todos los proveedores), todas vuelven a quedar tildadas
