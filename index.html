@@ -453,7 +453,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.09.19-2';
+const APP_VERSION='v2026.09.19-3';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -485,19 +485,19 @@ const DB={
     if(!this._ready||!this._dirty)return;
     this._dirty=false;
     const datos=this._datos();
-    const revLocal=Number(this._rev)||0;
-    datos.rev=revLocal+1; // cada guardado sube la versión
-    this._ultimoGuardado=this._fp(datos); // recordar exactamente lo que mando
-    // GUARDADO PROTEGIDO: solo escribe si el servidor sigue en la versión que yo conozco.
-    // Si otro dispositivo guardó algo más nuevo, NO piso nada: traigo lo nuevo y aviso.
+    // GUARDADO PROTEGIDO: solo escribe si el servidor NO tiene una versión que este dispositivo
+    // nunca vio. _rev = la versión más alta que este dispositivo vio o produjo (incluye las que
+    // están en camino), así dos acciones seguidas no se confunden con un conflicto.
     runTransaction(ref(fbDb,RAIZ),(actual)=>{
-      if(actual===null)return datos; // primera carga de la caché local; Firebase reintenta con el valor real
-      const revServ=Number(actual.rev)||0;
-      if(revServ!==revLocal)return; // conflicto: abortar (undefined = no escribir)
+      const revServ=actual?(Number(actual.rev)||0):0;
+      if(actual&&revServ>(Number(this._rev)||0))return; // el servidor tiene algo que no conozco: abortar
+      datos.rev=revServ+1;           // la nueva versión sigue a la del servidor
+      this._rev=datos.rev;           // ya la conozco (aunque todavía esté en camino)
+      this._ultimoGuardado=this._fp(datos); // para reconocer mi propio eco
       return datos;
     }).then(res=>{
       if(res.committed){
-        this._rev=datos.rev;
+        this._rev=Math.max(Number(this._rev)||0,datos.rev);
       }else{
         const d=res.snapshot?res.snapshot.val():null;
         if(d){aplicarDatosNube(d);}
