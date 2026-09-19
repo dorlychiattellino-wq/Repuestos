@@ -453,7 +453,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.09.19-1';
+const APP_VERSION='v2026.09.19-2';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -474,8 +474,16 @@ const DB={
     });
   },
   load(){/* la carga real la hace el listener onValue de abajo */},
+  // save() agrupa: si se llama muchas veces seguidas (ej. escribiendo una cantidad), guarda UNA sola vez
   save(){
     if(!this._ready)return; // no guardar hasta haber cargado lo de la nube
+    this._dirty=true;
+    clearTimeout(this._t);
+    this._t=setTimeout(()=>this._flush(),250);
+  },
+  _flush(){
+    if(!this._ready||!this._dirty)return;
+    this._dirty=false;
     const datos=this._datos();
     const revLocal=Number(this._rev)||0;
     datos.rev=revLocal+1; // cada guardado sube la versión
@@ -493,11 +501,23 @@ const DB={
       }else{
         const d=res.snapshot?res.snapshot.val():null;
         if(d){aplicarDatosNube(d);}
-        alert('⚠ Otro dispositivo guardó cambios más recientes.\n\nSe actualizó la pantalla con esos datos y NO se pisó nada. Volvé a hacer tu última acción.');
+        avisoSync('⚠ Otro dispositivo guardó cambios más recientes. Se actualizó la pantalla y no se pisó nada. Volvé a hacer tu última acción.');
       }
     }).catch(e=>console.error('Error guardando en Firebase',e));
   }
 };
+// aviso flotante (no bloquea la pantalla como alert)
+function avisoSync(msg){
+  let el=document.getElementById('avisoSync');
+  if(!el){el=document.createElement('div');el.id='avisoSync';
+    el.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9999;background:#33270f;color:var(--amber);border:1px solid var(--amber);padding:10px 16px;border-radius:10px;font-size:13px;max-width:90%;box-shadow:0 6px 20px rgba(0,0,0,.4)';
+    document.body.appendChild(el);}
+  el.textContent=msg;el.style.display='block';
+  clearTimeout(el._t);el._t=setTimeout(()=>{el.style.display='none';},7000);
+}
+// si queda un guardado pendiente y se cierra/oculta la app, lo mando ya
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')DB._flush();});
+window.addEventListener('pagehide',()=>DB._flush());
 const uid=()=>Math.random().toString(36).slice(2,9);
 const fmt=n=>'$'+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const ordenCod=n=>'OC-'+String(n).padStart(4,'0');
