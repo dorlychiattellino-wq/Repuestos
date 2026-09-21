@@ -453,7 +453,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.09.19-3';
+const APP_VERSION='v2026.09.21-1';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -464,14 +464,22 @@ const DB={
   _ready:false, _ultimoGuardado:null, _rev:0, // _rev = versión de los datos que este dispositivo conoce
   // empaqueta solo los datos (sin funciones) para guardar
   _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados,nrosReservados:this.nrosReservados||{}}},
-  _fp(d){ // huella estable de los datos (para comparar mi guardado vs lo que llega)
-    return JSON.stringify({
+  // quita listas/objetos vacíos y nulos, igual que hace Firebase al guardar, y ordena las claves:
+  // así la huella de lo que mando y la de lo que vuelve del servidor coinciden
+  _limpio(v){
+    if(Array.isArray(v)){const a=v.map(x=>this._limpio(x)).filter(x=>x!==undefined);return a.length?a:undefined;}
+    if(v&&typeof v==='object'){const o={};Object.keys(v).sort().forEach(k=>{const x=this._limpio(v[k]);if(x!==undefined)o[k]=x;});return Object.keys(o).length?o:undefined;}
+    if(v===null||v===undefined)return undefined;
+    return v;
+  },
+  _fp(d){ // huella estable de los datos (sin el rev, que se compara aparte)
+    return JSON.stringify(this._limpio({
       piezas:d.piezas||[], pedido:d.pedido||[], cots:d.cots||[],
       proveedores:d.proveedores||[], tc:d.tc||1000,
       ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||1,
       ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'', cerrados:d.cerrados||[],
-      nrosReservados:d.nrosReservados||{}, rev:Number(d.rev)||0
-    });
+      nrosReservados:d.nrosReservados||{}
+    })||{});
   },
   load(){/* la carga real la hace el listener onValue de abajo */},
   // save() agrupa: si se llama muchas veces seguidas (ej. escribiendo una cantidad), guarda UNA sola vez
@@ -566,9 +574,11 @@ document.getElementById('tcRefresh').onclick=async()=>{
 
 /* ---------- filtros / selects ---------- */
 function uniq(arr){return [...new Set(arr)].sort()}
+// escribe el HTML solo si cambió (si no, el navegador cierra la lista que estabas mirando)
+function setOpts(el,html){if(el.innerHTML!==html)el.innerHTML=html;}
 function fillSelect(sel,vals,label){
   const prev=sel.value; // recordar lo que estaba elegido
-  sel.innerHTML='<option value="">'+label+'</option>'+vals.map(v=>`<option>${v}</option>`).join('');
+  setOpts(sel,'<option value="">'+label+'</option>'+vals.map(v=>`<option>${v}</option>`).join(''));
   // si el valor anterior sigue existiendo entre las opciones, lo vuelvo a seleccionar
   if(prev&&vals.includes(prev))sel.value=prev;
 }
@@ -581,9 +591,9 @@ function refreshFilters(){
   const i=fImpl.value;
   const piezasMI=i?piezasM.filter(p=>p.impl===i):piezasM;
   fillSelect(fCat,uniq(piezasMI.map(p=>p.cat)),'Todas las categorías');
-  dlMarca.innerHTML=uniq(DB.piezas.map(p=>p.marca)).map(v=>`<option>${v}</option>`).join('');
+  setOpts(dlMarca,uniq(DB.piezas.map(p=>p.marca)).map(v=>`<option>${v}</option>`).join(''));
   refreshDlImpl();
-  dlCat.innerHTML=uniq(DB.piezas.map(p=>p.cat)).map(v=>`<option>${v}</option>`).join('');
+  setOpts(dlCat,uniq(DB.piezas.map(p=>p.cat)).map(v=>`<option>${v}</option>`).join(''));
 }
 // sugerencias de implemento en el formulario de pieza: solo los de la marca escrita
 // (si la marca es nueva o no tiene implementos cargados, sugiere todos)
@@ -595,7 +605,7 @@ function refreshDlImpl(){
     const deMarca=uniq(DB.piezas.filter(p=>(p.marca||'').trim().toLowerCase()===m).map(p=>p.impl)).filter(Boolean);
     if(deMarca.length)vals=deMarca;
   }
-  dlImpl.innerHTML=vals.map(v=>`<option>${v}</option>`).join('');
+  setOpts(dlImpl,vals.map(v=>`<option>${v}</option>`).join(''));
 }
 const fBuscar=document.getElementById('fBuscar'),fMarca=document.getElementById('fMarca'),
       fImpl=document.getElementById('fImpl'),fCat=document.getElementById('fCat'),
@@ -1771,19 +1781,20 @@ function aplicarDatosNube(d){
     ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'',
     nrosReservados:(d.nrosReservados&&typeof d.nrosReservados==='object')?d.nrosReservados:{}
   });
-  DB._rev=Number(d.rev)||0; // ahora conozco esta versión: mis próximos guardados parten de acá
-  const antes=DB.pedido.length;
-  normalizar();
-  if(DB.pedido.length!==antes)DB.save(); // si el saneo limpió duplicados, persisto
+  DB._rev=Math.max(Number(DB._rev)||0,Number(d.rev)||0); // ahora conozco esta versión
+  normalizar(); // saneo en memoria; se persiste con el próximo guardado del usuario (nunca desde acá)
   redibujarTodo();
 }
 onValue(raizRef, snap=>{
   setConn(true);
   const d=snap.val()||{};
-  // huella de lo que llega, para comparar contra lo último que yo guardé
   const entrante=DB._fp(d);
-  const esMiEco = (entrante===DB._ultimoGuardado);
-  if(!esMiEco){ // cambio externo real (otro dispositivo) o primera carga: lo traigo
+  const esMiEco=(entrante===DB._ultimoGuardado);
+  const igualQueTengo=DB._ready&&(entrante===DB._fp(DB._datos()));
+  if(esMiEco||igualQueTengo){
+    // mi propio guardado volviendo, o datos idénticos a los que ya muestro: no redibujo nada
+    DB._rev=Math.max(Number(DB._rev)||0,Number(d.rev)||0);
+  }else{ // cambio externo real (otro dispositivo) o primera carga: lo traigo
     aplicarDatosNube(d);
   }
   if(!DB._ready){
