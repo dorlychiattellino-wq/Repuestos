@@ -151,6 +151,9 @@
     table{font-size:13px}
     th,td{padding:7px}
   }
+/* botones de acción de órdenes cerradas: ícono con etiqueta chica debajo (se entiende sin pasar el mouse) */
+.btn.acc{display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:5px 8px;line-height:1.1;min-width:46px}
+.btn.acc span{font-size:9px;font-weight:600;letter-spacing:.2px;text-transform:uppercase;opacity:.85}
 </style>
 </head>
 <body>
@@ -453,7 +456,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.09.21-1';
+const APP_VERSION='v2026.11.04-1';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -1227,13 +1230,13 @@ function renderCerrados(){
     <td class="right">${o.items.length}</td>
     <td class="right price">${!o.pasadoProv?`<label onclick="event.stopPropagation()" title="Tildado = se suma en el total de arriba" style="cursor:pointer;margin-right:8px;display:inline-flex;align-items:center;gap:4px"><input type="checkbox" ${pendExcluidos.has(o.id)?'':'checked'} onchange="togglePendSuma('${o.id}')" style="accent-color:var(--amber);width:16px;height:16px;cursor:pointer"><span style="color:var(--amber);font-size:10px">Σ</span></label>`:''}${fmt(o.total)}</td>
     <td class="right" style="white-space:nowrap" onclick="event.stopPropagation()">
-      <button class="btn ghost sm" onclick="toggleRecibido('${o.id}')" title="Marcar recibido / sin recibir">📦</button>
-      <button class="btn ghost sm" onclick="togglePasadoProv('${o.id}')" title="Marcar pasado a Proveedores / no">📤</button>
-      <button class="btn ghost sm" onclick="csvCerradoProv('${o.id}')" title="CSV para Proveedores">📥</button>
-      <button class="btn sm" onclick="reabrirCerrado('${o.id}')" title="Reabrir">↩</button>
-      <button class="btn ghost sm" onclick="editarCerrado('${o.id}')" title="Editar referencia">✎</button>
-      <button class="btn ghost sm" onclick="pdfCerrado('${o.id}')" title="PDF">📄</button>
-      <button class="btn danger sm" onclick="eliminarCerrado('${o.id}')" title="Eliminar">✕</button>
+      <button class="btn ghost sm acc" onclick="toggleRecibido('${o.id}')" title="Marcar recibido / sin recibir">📦<span>Recib.</span></button>
+      <button class="btn ghost sm acc" onclick="togglePasadoProv('${o.id}')" title="Marcar pasado a Proveedores / no">✔<span>Pasado</span></button>
+      <button class="btn ghost sm acc" onclick="csvCerradoProv('${o.id}')" title="Generar CSV para Proveedores">📥<span>CSV</span></button>
+      <button class="btn sm acc" onclick="reabrirCerrado('${o.id}')" title="Reabrir">↩<span>Reabrir</span></button>
+      <button class="btn ghost sm acc" onclick="editarCerrado('${o.id}')" title="Editar Nº / referencia">✎<span>Editar</span></button>
+      <button class="btn ghost sm acc" onclick="pdfCerrado('${o.id}')" title="PDF">📄<span>PDF</span></button>
+      <button class="btn danger sm acc" onclick="eliminarCerrado('${o.id}')" title="Eliminar">✕</button>
     </td></tr>`;
     if(abierto){
       const filasItems=(o.items||[]).map(e=>{
