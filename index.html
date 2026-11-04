@@ -154,6 +154,21 @@
 /* botones de acción de órdenes cerradas: ícono con etiqueta chica debajo (se entiende sin pasar el mouse) */
 .btn.acc{display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:5px 8px;line-height:1.1;min-width:46px}
 .btn.acc span{font-size:9px;font-weight:600;letter-spacing:.2px;text-transform:uppercase;opacity:.85}
+/* servicios */
+.sv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.sv-chk{display:flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);cursor:pointer;font-size:13px;user-select:none}
+.sv-chk input{width:16px;height:16px;accent-color:var(--green)}
+.sv-chk.on{border-color:var(--green);background:rgba(126,200,80,.12)}
+.sv-chk select{margin-left:auto;font-size:11px;padding:1px 4px}
+.sv-extra{display:inline-flex;align-items:center;gap:6px;background:#1c2a1a;border:1px solid var(--green);color:var(--green-bright);border-radius:20px;padding:3px 10px;font-size:12px;margin:3px 4px 0 0}
+.sv-extra b{cursor:pointer;opacity:.7}.sv-extra b:hover{opacity:1}
+.imp-card{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px;flex-wrap:wrap}
+.imp-card.off{opacity:.55;border-style:dashed}
+.imp-card .nm{font-weight:700;flex:1;min-width:200px}
+.imp-card .meta{color:var(--muted);font-size:12px}
+.tag-hist{display:inline-block;font-size:10px;padding:2px 7px;border-radius:10px;background:#15331f;color:#6fd38a;margin-left:6px}
+.tag-hist.g{background:#33270f;color:var(--amber)}
+.tag-hist.m{background:var(--panel-2);color:var(--muted);border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -176,6 +191,7 @@
   <button data-view="comparativo">Comparativo</button>
   <button data-view="compra">Orden de compra</button>
   <button data-view="stock">Stock</button>
+  <button data-view="servicios">Servicios</button>
 </nav>
 
 <main>
@@ -407,6 +423,84 @@
     </div>
   </section>
 
+
+  <!-- ================= SERVICIOS ================= -->
+  <section class="view" id="view-servicios">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap">
+      <div><h2>Servicios</h2>
+        <p class="sub" style="margin-bottom:0">Mantenimiento de cada implemento: aceites, filtros y cualquier otra tarea. Los vendidos se desactivan pero conservan su historial.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="btnNuevoServicio">+ Cargar servicio</button>
+        <button class="btn ghost" id="btnNuevoImp">+ Implemento</button>
+      </div>
+    </div>
+    <div class="filters" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:14px">
+      <div class="field"><label>Implemento</label><select id="svImp"></select></div>
+      <div class="field"><label>Estado</label>
+        <select id="svEstado"><option value="act">Activos</option><option value="inact">Vendidos / inactivos</option><option value="">Todos</option></select></div>
+      <div class="field"><label>Tipo</label>
+        <select id="svMenor"><option value="">Mayores y menores</option><option value="0">Solo mayores</option><option value="1">Solo menores</option></select></div>
+      <div class="field"><label>Desde</label><input id="svDesde" type="date"></div>
+      <div class="field"><label>Hasta</label><input id="svHasta" type="date"></div>
+      <div class="field"><label>Tarea</label>
+        <select id="svTarea"><option value="">Cualquier tarea</option></select></div>
+      <div class="field" style="flex:2;min-width:160px"><label>Buscar en observaciones</label><input id="svBuscar" placeholder="Ej: válvulas, refrigerante..."></div>
+      <button class="btn ghost sm" id="btnSvLimpiar">Limpiar</button>
+      <button class="btn ghost sm" id="btnSvPdf">📄 PDF</button>
+    </div>
+    <div id="svImplementos" style="margin-top:14px"></div>
+    <div class="card" style="padding:0;overflow:auto;margin-top:8px">
+      <table id="tblServ">
+        <thead><tr><th>Fecha</th><th>Implemento</th><th class="right">Horas</th><th>Aceite</th><th>Filtro aceite</th><th>Gas-oil</th><th>Aire</th><th>Otras tareas</th><th>Observaciones</th><th class="right"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- modal servicio -->
+  <div class="modal-bg" id="modalServ">
+    <div class="modal" style="max-width:760px">
+      <h3 id="modalServTitle">Cargar servicio</h3>
+      <div class="grid-2">
+        <div class="field"><label>Implemento</label><select id="sv-imp"></select></div>
+        <div class="field"><label>Fecha</label><input id="sv-fecha" type="date"></div>
+      </div>
+      <div class="field"><label>Horas del implemento (opcional)</label><input id="sv-horas" type="number" step="0.01" placeholder="Ej: 2935,2"></div>
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Aceite</label>
+      <div class="sv-grid" id="sv-aceite"></div>
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-top:10px">Filtro de aceite</label>
+      <div class="sv-grid" id="sv-filtro"></div>
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-top:10px">Otros filtros</label>
+      <div class="sv-grid" id="sv-otros"></div>
+      <div class="field" style="margin-top:12px"><label>Otras tareas (escribí y Enter, o elegí de la lista)</label>
+        <input id="sv-extra-in" list="dlExtras" placeholder="Ej: líquido refrigerante, aceite puente delantero, regulación de válvulas...">
+        <datalist id="dlExtras"></datalist>
+        <div id="sv-extras"></div></div>
+      <div class="field"><label>Observaciones</label><textarea id="sv-obs" rows="2" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:8px;font:inherit"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="cerrarModalServ()">Cancelar</button>
+        <button class="btn" id="sv-guardar">Guardar servicio</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- modal implemento -->
+  <div class="modal-bg" id="modalImp">
+    <div class="modal">
+      <h3 id="modalImpTitle">Implemento</h3>
+      <div class="field"><label>Nombre</label><input id="im-nombre" list="dlImpl" placeholder="Ej: TRACTOR NEW HOLLAND T7.260"></div>
+      <div class="grid-2">
+        <div class="field"><label>Tipo</label><select id="im-menor"><option value="0">Mayor (tractor, cosechadora...)</option><option value="1">Menor (motor de chimango, etc.)</option></select></div>
+        <div class="field"><label>Estado</label><select id="im-activo"><option value="1">Activo</option><option value="0">Vendido / inactivo</option></select></div>
+      </div>
+      <div class="field"><label>Nota (opcional)</label><input id="im-nota" placeholder="Ej: vendido 03/2026 a ..."></div>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="cerrarModalImp()">Cancelar</button>
+        <button class="btn" id="im-guardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- modal de movimiento de stock -->
   <div class="modal-bg" id="modalMov">
     <div class="modal">
@@ -523,7 +617,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.11.04-4';
+const APP_VERSION='v2026.11.04-5';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -533,7 +627,7 @@ const DB={
   ordenSeq:1, ordenNro:1, ordenRef:'', cerrados:[],
   _ready:false, _ultimoGuardado:null, _rev:0, // _rev = versión de los datos que este dispositivo conoce
   // empaqueta solo los datos (sin funciones) para guardar
-  _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados,nrosReservados:this.nrosReservados||{},stock:this.stock||{},movs:this.movs||[]}},
+  _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados,nrosReservados:this.nrosReservados||{},stock:this.stock||{},movs:this.movs||[],implementos:this.implementos||[],servicios:this.servicios||[]}},
   // quita listas/objetos vacíos y nulos, igual que hace Firebase al guardar, y ordena las claves:
   // así la huella de lo que mando y la de lo que vuelve del servidor coinciden
   _limpio(v){
@@ -548,7 +642,7 @@ const DB={
       proveedores:d.proveedores||[], tc:d.tc||1000,
       ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||1,
       ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'', cerrados:d.cerrados||[],
-      nrosReservados:d.nrosReservados||{}, stock:d.stock||{}, movs:d.movs||[]
+      nrosReservados:d.nrosReservados||{}, stock:d.stock||{}, movs:d.movs||[], implementos:d.implementos||[], servicios:d.servicios||[]
     })||{});
   },
   load(){/* la carga real la hace el listener onValue de abajo */},
@@ -678,7 +772,7 @@ const IMPLEMENTOS_BASE=[
   'PARATIL','COSECHADORA NEW HOLLAND CR6.80. 2019 PATENTE EBJ20.'
 ];
 function implementosTodos(){
-  const usados=uniq(DB.piezas.map(p=>p.impl)).filter(Boolean);
+  const usados=uniq(DB.piezas.map(p=>p.impl).concat((DB.implementos||[]).map(i=>i.nombre))).filter(Boolean);
   const lower=new Set(usados.map(x=>x.trim().toLowerCase()));
   return usados.concat(IMPLEMENTOS_BASE.filter(x=>!lower.has(x.trim().toLowerCase()))).sort((a,b)=>a.localeCompare(b,'es'));
 }
@@ -2021,15 +2115,230 @@ document.getElementById('btnMovCsv').onclick=()=>{
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='movimientos-stock-'+hoyISO()+'.csv';a.click();
 };
 
+
+/* ---------- SERVICIOS ---------- */
+const SV_TILDES={
+  aceite:[['aM','Motor'],['aC','Caja'],['aD','Diferencial'],['aH','Hidráulico']],
+  filtro:[['fM','Motor'],['fC','Caja'],['fD','Diferencial'],['fH','Hidráulico']],
+  otros:[['gas','Filtro gas-oil'],['aire','Filtro aire']]
+};
+const SV_LABEL={aM:'Aceite motor',aC:'Aceite caja',aD:'Aceite diferencial',aH:'Aceite hidráulico',fM:'Filtro aceite motor',fC:'Filtro aceite caja',fD:'Filtro aceite dif.',fH:'Filtro aceite hid.',gas:'Filtro gas-oil',aire:'Filtro aire'};
+// histórico transcripto de las planillas manuscritas (se carga UNA sola vez si la base no tiene servicios)
+const SV_HISTORICO={"implementos":[{"id":"i_cr680","nombre":"COSECHADORA NEW HOLLAND CR6.80 2019","menor":false},{"id":"i_yineng","nombre":"PALA CARGADORA YINENG 2023","menor":false},{"id":"i_t7260","nombre":"TRACTOR NEW HOLLAND T7.260","menor":false},{"id":"i_pauny250","nombre":"TRACTOR PAUNY 250A","menor":false},{"id":"i_audaz","nombre":"TRACTOR PAUNY AUDAZ 2200 4X4","menor":false},{"id":"i_t8350","nombre":"TRACTOR NEW HOLLAND T8 350 4X4","menor":false},{"id":"i_deutz","nombre":"TRACTOR DEUTZ FAHR 160","menor":false},{"id":"i_zanello","nombre":"TRACTOR ZANELLO UP-100","menor":false},{"id":"i_m_valenti","nombre":"MOTOR CHIMANGO VALENTI","menor":true},{"id":"i_m_procor","nombre":"MOTOR CHIMANGO PROCOR","menor":true},{"id":"i_m_posta","nombre":"MOTOR TRACTOR POSTA","menor":true},{"id":"i_m_procor_chicos","nombre":"MOTOR PROCOR (CHICOS)","menor":true}],"servicios":[{"imp":"i_cr680","fecha":"2025-09-03","horas":5478.66,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite y filtro motor"},{"imp":"i_cr680","fecha":"2025-11-28","horas":5748,"t":{"aC":true,"aD":true,"aH":true},"obs":"Rotor 3644 horas: se cementó rotores y se cambiaron muelas, se reparó noria, cajones de sacudidor y batea, retrilla; se cambiaron tacos de cajones de sacudidor","extras":["Reparación rotor / noria / sacudidor"]},{"imp":"i_cr680","fecha":"2025-12-09","horas":5800.97,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite de motor y filtro"},{"imp":"i_cr680","fecha":"2025-12-12","horas":5823.17,"t":{"gas":true},"obs":"Cambio filtro de gas-oil"},{"imp":"i_cr680","fecha":"2026-03-17","horas":5960.18,"t":{},"obs":"Cambio de líquido refrigerante","extras":["Líquido refrigerante"]},{"imp":"i_cr680","fecha":"2026-04-26","horas":6119.09,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite de motor y filtro"},{"imp":"i_cr680","fecha":"2026-05-10","horas":6256.58,"t":{"gas":true},"obs":"Cambio de filtros de gas-oil"},{"imp":"i_cr680","fecha":"2026-05-20","horas":6337.47,"t":{},"obs":"Cambio de válvula de aire gobernadora","extras":["Válvula de aire gobernadora"]},{"imp":"i_cr680","fecha":"2026-06-19","horas":6423.54,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite motor y filtro"},{"imp":"i_cr680","fecha":"2026-08-07","horas":6666.31,"t":{"gas":true},"obs":"Cambio de filtro de gas-oil"},{"imp":"i_cr680","fecha":"2026-08-15","horas":6724.92,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite de motor y filtro"},{"imp":"i_yineng","fecha":"2024-03-11","horas":107.2,"t":{"aM":true,"fM":true},"obs":""},{"imp":"i_yineng","fecha":"2025-02-21","horas":204,"t":{"aire":true},"obs":"Mantenimiento completo","extras":["Mantenimiento completo"]},{"imp":"i_t7260","fecha":"2023-10-18","horas":134.3,"t":{"aM":true,"fM":true,"fH":true,"gas":true},"obs":""},{"imp":"i_t7260","fecha":"2023-11-23","horas":583.3,"t":{"aM":true,"fM":true,"gas":true},"obs":""},{"imp":"i_t7260","fecha":"2024-05-22","horas":921.5,"t":{"aM":true,"aH":true,"fM":true,"fH":true,"gas":true,"aire":true},"obs":"Cambio filtro cabina y aceite reductores","extras":["Filtro cabina","Aceite reductores"]},{"imp":"i_t7260","fecha":"2024-06-11","horas":1140.8,"t":{"gas":true},"obs":"Cambio filtro gas-oil"},{"imp":"i_t7260","fecha":"2024-07-01","horas":1229.1,"t":{"aM":true,"fM":true},"obs":"Cambio aceite motor y filtro"},{"imp":"i_t7260","fecha":"2024-08-29","horas":1494.7,"t":{"gas":true},"obs":"Cambio filtro gas-oil"},{"imp":"i_t7260","fecha":"2024-09-06","horas":1530,"t":{"aM":true,"aC":true,"aD":true,"aH":true,"fM":true,"fC":true,"fD":true,"fH":true,"aire":true},"obs":"Se reguló válvulas","extras":["Regulación de válvulas"]},{"imp":"i_t7260","fecha":"2024-11-30","horas":1864.3,"t":{"aM":true},"obs":"Cambio aceite de motor"},{"imp":"i_t7260","fecha":"2025-04-25","horas":2068.6,"t":{"gas":true},"obs":"Cambio filtro gas-oil"},{"imp":"i_t7260","fecha":"2025-06-16","horas":2232.2,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro"},{"imp":"i_t7260","fecha":"2025-10-11","horas":2570.4,"t":{"gas":true},"obs":"Filtro de gas-oil"},{"imp":"i_t7260","fecha":"2025-10-13","horas":2602.5,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite y filtro motor"},{"imp":"i_t7260","fecha":"2026-03-17","horas":2935.2,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite y filtro motor"},{"imp":"i_t7260","fecha":"2026-07-22","horas":3256.9,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite de motor y filtro"},{"imp":"i_t7260","fecha":"2026-10-18","horas":3388.4,"t":{"aC":true,"aD":true,"aH":true,"fC":true,"fD":true,"fH":true},"obs":"Servicio grande: cambio líquido refrigerante; aceite puente delantero; aceite reductores; filtro aire de motor int. y ext.; filtro de AA cabina int. y ext.; aceite de transmisión, caja y filtros","extras":["Líquido refrigerante","Aceite puente delantero","Aceite reductores","Filtro aire motor int. y ext.","Filtro AA cabina int. y ext.","Aceite transmisión"]},{"imp":"i_pauny250","fecha":"2022-11-15","horas":90,"t":{"aM":true},"obs":"Cambio aceite motor"},{"imp":"i_pauny250","fecha":"2023-06-28","horas":413,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro motor"},{"imp":"i_pauny250","fecha":"2024-09-11","horas":823,"t":{"aM":true,"fM":true,"gas":true},"obs":"Cambio aceite y filtro"},{"imp":"i_pauny250","fecha":"2025-04-03","horas":1180,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro"},{"imp":"i_pauny250","fecha":"2025-09-08","horas":1542,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro"},{"imp":"i_pauny250","fecha":"2026-03-17","horas":1893,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro motor"},{"imp":"i_pauny250","fecha":"2026-07-11","horas":2386,"t":{"aM":true,"fM":true},"obs":"Cambio aceite de motor y filtro"},{"imp":"i_audaz","fecha":"2021-12-06","horas":160,"t":{"aM":true},"obs":"Cambio aceite motor"},{"imp":"i_audaz","fecha":"2022-01-08","horas":573,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro"},{"imp":"i_audaz","fecha":"2022-09-19","horas":919,"t":{"aM":true},"obs":"Cambio aceite motor"},{"imp":"i_audaz","fecha":"2022-11-28","horas":1243,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro motor"},{"imp":"i_audaz","fecha":"2023-03-14","horas":1605,"t":{"aM":true},"obs":"Cambio aceite"},{"imp":"i_audaz","fecha":"2023-06-13","horas":1841,"t":{"gas":true},"obs":"Cambio filtro gas-oil"},{"imp":"i_audaz","fecha":"2023-09-23","horas":1881,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro"},{"imp":"i_audaz","fecha":"2023-12-15","horas":2321,"t":{"aM":true},"obs":""},{"imp":"i_audaz","fecha":"2024-07-07","horas":2607,"t":{"gas":true},"obs":"Cambio filtro gas-oil"},{"imp":"i_audaz","fecha":"2024-09-11","horas":2711,"t":{"aM":true,"aH":true,"fM":true,"fH":true},"obs":"Cambio aceite puente delantero","extras":["Aceite puente delantero"]},{"imp":"i_audaz","fecha":"2024-11-05","horas":3062,"t":{"aM":true},"obs":"Cambio de aceite"},{"imp":"i_audaz","fecha":"2024-11-20","horas":3261,"t":{"gas":true},"obs":"Cambio filtro gas-oil"},{"imp":"i_audaz","fecha":"2025-02-25","horas":3425,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro"},{"imp":"i_audaz","fecha":"2025-09-08","horas":3719,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro"},{"imp":"i_audaz","fecha":"2025-09-15","horas":3827,"t":{"gas":true},"obs":"Filtro de gas-oil"},{"imp":"i_audaz","fecha":"2025-10-24","horas":4074,"t":{"aM":true},"obs":"Cambio aceite de motor"},{"imp":"i_audaz","fecha":"2026-03-23","horas":4361,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro motor"},{"imp":"i_audaz","fecha":"2026-05-10","horas":4535,"t":{"gas":true},"obs":"Cambio de filtro gas-oil"},{"imp":"i_audaz","fecha":"2026-07-11","horas":4825,"t":{"aM":true,"fM":true},"obs":"Cambio de aceite y filtro"},{"imp":"i_audaz","fecha":"2026-09-11","horas":5062,"t":{"aM":true,"aC":true,"aD":true},"obs":"Cambio aceite motor, transmisión y puente delantero","extras":["Aceite transmisión","Aceite puente delantero"]},{"imp":"i_t8350","fecha":"2021-04-20","horas":2456,"t":{"aM":true},"obs":""},{"imp":"i_t8350","fecha":"2021-05-25","horas":2532.8,"t":{"gas":true},"obs":""},{"imp":"i_t8350","fecha":"2021-09-03","horas":2767,"t":{"aM":true,"aC":true,"aD":true,"aH":true,"fM":true,"fC":true,"fD":true,"fH":true,"aire":true},"obs":"Revisión válvulas y cambio agua","extras":["Regulación de válvulas","Cambio de agua / refrigerante"]},{"imp":"i_t8350","fecha":"2021-11-02","horas":3082.8,"t":{"aM":true,"fM":true},"obs":"Cambio aceite puente delantero","extras":["Aceite puente delantero"]},{"imp":"i_t8350","fecha":"2021-11-26","horas":3379.6,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro motor"},{"imp":"i_t8350","fecha":"2022-01-02","horas":3727.7,"t":{"aM":true},"obs":"Cambio aceite"},{"imp":"i_t8350","fecha":"2022-03-08","horas":4054.5,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro motor"},{"imp":"i_t8350","fecha":"2022-06-21","horas":4157.4,"t":{"gas":true},"obs":"Cambio filtro gas-oil"},{"imp":"i_t8350","fecha":"2022-09-30","horas":4370.2,"t":{"aM":true},"obs":"Cambio aceite motor"},{"imp":"i_t8350","fecha":"2022-11-09","horas":4562,"t":{},"obs":"Cambio válvula remota 3","extras":["Válvula remota"]},{"imp":"i_t8350","fecha":"2022-12-01","horas":4706.6,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro motor"},{"imp":"i_t8350","fecha":"2023-03-21","horas":5008.2,"t":{"aM":true},"obs":"Cambio aceite"},{"imp":"i_t8350","fecha":"2023-06-02","horas":5345.6,"t":{"aM":true,"fM":true,"gas":true,"aire":true},"obs":"Cambio aceite y filtro motor y gas-oil"},{"imp":"i_t8350","fecha":"2023-08-12","horas":5394.2,"t":{"aC":true,"aD":true,"aH":true,"fC":true,"fD":true,"fH":true,"aire":true},"obs":"Servicio general 1200 hs","extras":["Servicio general"]},{"imp":"i_t8350","fecha":"2023-11-19","horas":5725.2,"t":{"aM":true},"obs":""},{"imp":"i_t8350","fecha":"2024-05-30","horas":6078.5,"t":{"aM":true,"fM":true,"gas":true},"obs":"Servicio"},{"imp":"i_t8350","fecha":"2024-09-05","horas":6218,"t":{"aC":true,"aD":true,"aH":true,"fC":true,"fD":true,"fH":true,"aire":true},"obs":"Se reguló válvulas","extras":["Regulación de válvulas"]},{"imp":"i_t8350","fecha":"2024-11-05","horas":6427.9,"t":{"aM":true},"obs":"Cambio de aceite motor"},{"imp":"i_t8350","fecha":"2025-06-16","horas":6765.8,"t":{"aM":true,"fM":true,"gas":true},"obs":"Cambio filtro y aceite motor y gas-oil"},{"imp":"i_t8350","fecha":"2025-10-17","horas":7116.3,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro motor"},{"imp":"i_t8350","fecha":"2026-06-25","horas":7301.9,"t":{"gas":true},"obs":"Cambio filtro gas-oil"},{"imp":"i_deutz","fecha":"2016-02-25","horas":null,"t":{"aM":true,"fM":true},"obs":""},{"imp":"i_deutz","fecha":"2016-09-15","horas":null,"t":{"aM":true,"fM":true,"gas":true},"obs":""},{"imp":"i_deutz","fecha":"2017-04-11","horas":6000,"t":{"aM":true,"fM":true,"gas":true},"obs":"Horas dudosas (¿6000?)"},{"imp":"i_deutz","fecha":"2017-05-29","horas":26,"t":{"aM":true,"fM":true,"gas":true},"obs":"Se reparó tablero (¿?)"},{"imp":"i_deutz","fecha":"2017-06-03","horas":32,"t":{"fH":true,"aire":true},"obs":"Motor: camisa y pistones (¿?)"},{"imp":"i_deutz","fecha":"2017-06-22","horas":70,"t":{"aire":true},"obs":"Juego completo de filtros (¿?)","extras":["Juego completo de filtros"]},{"imp":"i_deutz","fecha":"2018-02-17","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true,"gas":true},"obs":""},{"imp":"i_deutz","fecha":"2018-10-22","horas":null,"t":{"aM":true,"fM":true,"gas":true,"aire":"S"},"obs":"Mantenimiento completo","extras":["Mantenimiento completo"]},{"imp":"i_deutz","fecha":"2019-04-04","horas":null,"t":{"aM":true,"fM":true},"obs":""},{"imp":"i_deutz","fecha":"2019-10-10","horas":null,"t":{"aM":true,"fM":true,"gas":true,"aire":"S"},"obs":""},{"imp":"i_deutz","fecha":"2020-09-17","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true},"obs":""},{"imp":"i_deutz","fecha":"2021-04-30","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true,"aire":"S"},"obs":"Servicio completo","extras":["Servicio completo"]},{"imp":"i_deutz","fecha":"2021-09-10","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true,"gas":true,"aire":"S"},"obs":""},{"imp":"i_deutz","fecha":"2022-04-04","horas":null,"t":{"aM":true,"fM":true,"aire":"S"},"obs":"Servicio completo","extras":["Servicio completo"]},{"imp":"i_deutz","fecha":"2022-07-08","horas":null,"t":{"aire":"S"},"obs":"Camisa sopleteada"},{"imp":"i_deutz","fecha":"2022-10-26","horas":null,"t":{"aM":true,"fM":true},"obs":"Arreglo alternador","extras":["Alternador"]},{"imp":"i_deutz","fecha":"2023-09-23","horas":973,"t":{"aM":true,"fM":true},"obs":"Cambio aceite y filtro"},{"imp":"i_deutz","fecha":"2024-02-29","horas":1825,"t":{"aM":true,"fM":true},"obs":"Cambio aceite"},{"imp":"i_deutz","fecha":"2025-03-01","horas":447.9,"t":{"aM":true,"fM":true,"gas":true},"obs":"Motor reparado; cambio aceite y filtro gas-oil","extras":["Motor reparado"]},{"imp":"i_zanello","fecha":"2016-02-06","horas":null,"t":{"aM":true,"fM":true},"obs":""},{"imp":"i_zanello","fecha":"2016-09-15","horas":null,"t":{"aM":true,"fM":true,"gas":true},"obs":""},{"imp":"i_zanello","fecha":"2017-05-29","horas":null,"t":{"aM":true,"fM":true,"gas":true},"obs":""},{"imp":"i_zanello","fecha":"2017-09-19","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true,"gas":true},"obs":"Válvulas y retén (¿?)","extras":["Válvulas y retén"]},{"imp":"i_zanello","fecha":"2018-02-17","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true},"obs":"Embrague nuevo","extras":["Embrague"]},{"imp":"i_zanello","fecha":"2019-02-15","horas":null,"t":{"aM":true,"aC":"R","fM":true,"gas":true,"aire":"S"},"obs":"Mantenimiento completo","extras":["Mantenimiento completo"]},{"imp":"i_zanello","fecha":"2019-11-07","horas":null,"t":{"aM":true,"fM":true,"aire":"S"},"obs":""},{"imp":"i_zanello","fecha":"2020-02-20","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true,"gas":true,"aire":"S"},"obs":""},{"imp":"i_zanello","fecha":"2021-09-17","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true,"gas":true,"aire":"S"},"obs":"Servicio completo","extras":["Servicio completo"]},{"imp":"i_zanello","fecha":"2021-02-27","horas":null,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true,"gas":true,"aire":"S"},"obs":"Servicio completo","extras":["Servicio completo"]},{"imp":"i_zanello","fecha":"2021-09-08","horas":329,"t":{"aM":true,"aC":"R","aD":"R","aH":"R","fM":true,"aire":"S"},"obs":"Servicio completo","extras":["Servicio completo"]},{"imp":"i_zanello","fecha":"2022-07-07","horas":654,"t":{"aM":true,"gas":true},"obs":"Servicio completo","extras":["Servicio completo"]},{"imp":"i_zanello","fecha":"2024-05-23","horas":955,"t":{"aM":true,"fM":true,"gas":true},"obs":"Rep. bomba gas-oil","extras":["Bomba de gas-oil"]},{"imp":"i_m_valenti","fecha":"2021-10-06","horas":0,"t":{"aM":true},"obs":"Nuevo. Cambio aceite motor"},{"imp":"i_m_procor","fecha":"2021-10-06","horas":0,"t":{"aM":true},"obs":"Cambio aceite motor"},{"imp":"i_m_posta","fecha":"2021-12-15","horas":15,"t":{"aM":true},"obs":"Cambio aceite motor"},{"imp":"i_m_valenti","fecha":"2022-09-18","horas":null,"t":{"aM":true},"obs":"Cambio aceite motor"},{"imp":"i_m_procor","fecha":"2022-09-18","horas":null,"t":{"aM":true},"obs":"Cambio aceite motor"},{"imp":"i_m_valenti","fecha":"2023-09-14","horas":null,"t":{"aM":true,"aire":"S"},"obs":"Servicio completo","extras":["Servicio completo"]},{"imp":"i_m_procor_chicos","fecha":"2023-09-14","horas":null,"t":{"aM":true,"aire":"S"},"obs":"Servicio completo","extras":["Servicio completo"]}]};
+function sembrarHistoricoServicios(){
+  if(DB.servicios.length||DB.implementos.length)return false;
+  SV_HISTORICO.implementos.forEach(i=>DB.implementos.push({id:i.id,nombre:i.nombre,menor:!!i.menor,activo:true,nota:''}));
+  SV_HISTORICO.servicios.forEach(s=>DB.servicios.push({id:uid(),imp:s.imp,fecha:s.fecha,horas:(s.horas==null?null:s.horas),t:s.t||{},extras:s.extras||[],obs:s.obs||''}));
+  return true;
+}
+function impNombre(id){const i=DB.implementos.find(x=>x.id===id);return i?i.nombre:'(implemento eliminado)';}
+function tildeTxt(v){return v===true?'✓':(v==='R'?'R':(v==='S'?'S':''));}
+function svResumen(s,grupo){ // texto corto de un grupo de tildes
+  const partes=[];
+  SV_TILDES[grupo].forEach(([k,lab])=>{const v=s.t&&s.t[k];if(v)partes.push(lab.slice(0,3)+(v===true?'✓':v));});
+  return partes.join(' · ')||'—';
+}
+function extrasTodos(){
+  const set=new Set(['Líquido refrigerante','Aceite puente delantero','Aceite reductores','Aceite transmisión','Filtro cabina','Filtro aire motor int. y ext.','Regulación de válvulas','Servicio completo','Mantenimiento completo','Juego completo de filtros','Embrague','Alternador','Bomba de gas-oil','Engrase general','Correas','Batería']);
+  DB.servicios.forEach(s=>(s.extras||[]).forEach(e=>set.add(e)));
+  return [...set].sort((a,b)=>a.localeCompare(b,'es'));
+}
+// ----- filtros / render -----
+const svImp=document.getElementById('svImp'),svEstado=document.getElementById('svEstado'),svMenor=document.getElementById('svMenor'),svDesde=document.getElementById('svDesde'),svHasta=document.getElementById('svHasta'),svTarea=document.getElementById('svTarea'),svBuscar=document.getElementById('svBuscar');
+[svImp,svEstado,svMenor,svDesde,svHasta,svTarea,svBuscar].forEach(e=>{e.oninput=renderServicios;e.onchange=renderServicios;});
+document.getElementById('btnSvLimpiar').onclick=()=>{svImp.value='';svEstado.value='act';svMenor.value='';svDesde.value='';svHasta.value='';svTarea.value='';svBuscar.value='';renderServicios();};
+function impsFiltrados(){
+  return DB.implementos.filter(i=>(svEstado.value===''||(svEstado.value==='act'?i.activo:!i.activo))&&(svMenor.value===''||(svMenor.value==='1'?i.menor:!i.menor)))
+    .sort((a,b)=>(a.menor-b.menor)||a.nombre.localeCompare(b.nombre,'es'));
+}
+function serviciosFiltrados(){
+  const imps=new Set(impsFiltrados().map(i=>i.id));
+  const q=(svBuscar.value||'').toLowerCase(),t=svTarea.value;
+  return DB.servicios.filter(s=>{
+    if(svImp.value){if(s.imp!==svImp.value)return false;}else if(!imps.has(s.imp))return false;
+    if(svDesde.value&&(s.fecha||'')<svDesde.value)return false;
+    if(svHasta.value&&(s.fecha||'')>svHasta.value)return false;
+    if(t){if(t.startsWith('x:')){if(!(s.extras||[]).includes(t.slice(2)))return false;}else if(!(s.t&&s.t[t]))return false;}
+    if(q&&!((s.obs||'')+' '+(s.extras||[]).join(' ')).toLowerCase().includes(q))return false;
+    return true;
+  }).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+}
+function renderServicios(){
+  const tb=document.querySelector('#tblServ tbody');if(!tb)return;
+  const prev=svImp.value;
+  setOpts(svImp,'<option value="">Todos los implementos</option>'+impsFiltrados().map(i=>`<option value="${i.id}">${i.nombre}${i.activo?'':' (inactivo)'}</option>`).join(''));
+  if(prev&&[...svImp.options].some(o=>o.value===prev))svImp.value=prev;
+  const prevT=svTarea.value;
+  setOpts(svTarea,'<option value="">Cualquier tarea</option>'+Object.entries(SV_LABEL).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')+extrasTodos().map(e=>`<option value="x:${e}">${e}</option>`).join(''));
+  if(prevT&&[...svTarea.options].some(o=>o.value===prevT))svTarea.value=prevT;
+  const imps=svImp.value?DB.implementos.filter(i=>i.id===svImp.value):impsFiltrados();
+  document.getElementById('svImplementos').innerHTML=imps.length?imps.map(i=>{
+    const ss=DB.servicios.filter(s=>s.imp===i.id).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+    const ult=ss[0];
+    return `<div class="imp-card ${i.activo?'':'off'}">
+      <div class="nm">${i.nombre}${i.menor?'<span class="tag-hist m">menor</span>':''}${i.activo?'':'<span class="tag-hist g">vendido / inactivo</span>'}${i.nota?`<div class="meta">${i.nota}</div>`:''}</div>
+      <div class="meta">${ss.length} servicio${ss.length===1?'':'s'}${ult?' · último: '+fmtFechaISO(ult.fecha)+(ult.horas?' ('+Number(ult.horas).toLocaleString('es-AR')+' hs)':''):''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn sm" onclick="abrirServ(null,'${i.id}')">+ Servicio</button>
+        <button class="btn ghost sm" onclick="pdfServicios('${i.id}')" title="PDF de este implemento">📄</button>
+        <button class="btn ghost sm" onclick="editarImp('${i.id}')" title="Editar">✎</button>
+        <button class="btn ghost sm" onclick="toggleImp('${i.id}')" title="${i.activo?'Marcar como vendido / inactivo':'Volver a activar'}">${i.activo?'⏸ Desactivar':'▶ Activar'}</button>
+        <button class="btn danger sm" onclick="borrarImp('${i.id}')" title="Eliminar implemento y su historial">✕</button>
+      </div></div>`;
+  }).join(''):`<div class="empty">No hay implementos para ese filtro. Cargá uno con "+ Implemento".</div>`;
+  const lista=serviciosFiltrados();
+  if(!lista.length){tb.innerHTML=`<tr><td colspan="10"><div class="empty">Sin servicios para ese filtro.</div></td></tr>`;return}
+  tb.innerHTML=lista.map(s=>`<tr>
+    <td style="white-space:nowrap">${fmtFechaISO(s.fecha)}</td>
+    <td><b>${impNombre(s.imp)}</b></td>
+    <td class="right mono">${s.horas!=null&&s.horas!==''?Number(s.horas).toLocaleString('es-AR'):'—'}</td>
+    <td style="font-size:12px">${svResumen(s,'aceite')}</td>
+    <td style="font-size:12px">${svResumen(s,'filtro')}</td>
+    <td>${tildeTxt(s.t&&s.t.gas)||'—'}</td>
+    <td>${tildeTxt(s.t&&s.t.aire)||'—'}</td>
+    <td>${(s.extras||[]).map(e=>`<span class="tag-hist">${e}</span>`).join(' ')||'—'}</td>
+    <td style="font-size:12px;color:var(--muted);max-width:260px">${s.obs||''}</td>
+    <td class="right" style="white-space:nowrap">
+      <button class="btn ghost sm" onclick="abrirServ('${s.id}')" title="Editar">✎</button>
+      <button class="btn danger sm" onclick="borrarServ('${s.id}')" title="Borrar">✕</button>
+    </td></tr>`).join('');
+}
+// ----- modal implemento -----
+const modalImp=document.getElementById('modalImp');let impEditId=null;
+function abrirImp(id){
+  impEditId=id||null;const i=id?DB.implementos.find(x=>x.id===id):null;
+  document.getElementById('modalImpTitle').textContent=i?'Editar implemento':'Nuevo implemento';
+  document.getElementById('im-nombre').value=i?i.nombre:'';
+  document.getElementById('im-menor').value=i&&i.menor?'1':'0';
+  document.getElementById('im-activo').value=i&&!i.activo?'0':'1';
+  document.getElementById('im-nota').value=i?(i.nota||''):'';
+  refreshDlImpl();modalImp.classList.add('open');
+}
+function editarImp(id){abrirImp(id);}
+function cerrarModalImp(){modalImp.classList.remove('open');impEditId=null;}
+document.getElementById('im-guardar').onclick=()=>{
+  const nombre=document.getElementById('im-nombre').value.trim().toUpperCase();
+  if(!nombre){alert('Poné el nombre del implemento.');return;}
+  const datos={nombre,menor:document.getElementById('im-menor').value==='1',activo:document.getElementById('im-activo').value==='1',nota:document.getElementById('im-nota').value.trim()};
+  if(impEditId){Object.assign(DB.implementos.find(x=>x.id===impEditId),datos);}
+  else{if(DB.implementos.some(x=>x.nombre===nombre)){alert('Ya existe un implemento con ese nombre.');return;}DB.implementos.push({id:uid(),...datos});}
+  DB.save();cerrarModalImp();renderServicios();
+};
+function toggleImp(id){
+  const i=DB.implementos.find(x=>x.id===id);if(!i)return;
+  if(i.activo){if(!confirm('¿Marcar "'+i.nombre+'" como vendido / inactivo?\n\nNo se borra nada: su historial queda guardado y lo podés ver con el filtro "Vendidos / inactivos" o volver a activarlo cuando quieras.'))return;}
+  i.activo=!i.activo;DB.save();renderServicios();
+}
+function borrarImp(id){
+  const i=DB.implementos.find(x=>x.id===id);if(!i)return;
+  const n=DB.servicios.filter(s=>s.imp===id).length;
+  if(!confirm('¿Eliminar "'+i.nombre+'" y sus '+n+' servicio(s)?\n\nEsto NO se puede deshacer. Si lo vendiste, mejor usá "Desactivar" para conservar el historial.'))return;
+  DB.implementos=DB.implementos.filter(x=>x.id!==id);DB.servicios=DB.servicios.filter(s=>s.imp!==id);
+  DB.save();renderServicios();
+}
+document.getElementById('btnNuevoImp').onclick=()=>abrirImp(null);
+// ----- modal servicio -----
+const modalServ=document.getElementById('modalServ');let servEditId=null,servExtras=[];
+function pintarTildes(t){
+  const mk=(grupo)=>SV_TILDES[grupo].map(([k,lab])=>{const v=t&&t[k];return `<label class="sv-chk ${v?'on':''}" data-k="${k}"><input type="checkbox" ${v?'checked':''}> ${lab}<select title="✓ cambiado · R revisado · S sopleteado"><option value="1" ${v===true?'selected':''}>✓</option><option value="R" ${v==='R'?'selected':''}>R</option><option value="S" ${v==='S'?'selected':''}>S</option></select></label>`;}).join('');
+  document.getElementById('sv-aceite').innerHTML=mk('aceite');
+  document.getElementById('sv-filtro').innerHTML=mk('filtro');
+  document.getElementById('sv-otros').innerHTML=mk('otros');
+  document.querySelectorAll('#modalServ .sv-chk').forEach(l=>{
+    const cb=l.querySelector('input'),sel=l.querySelector('select');
+    cb.onchange=()=>l.classList.toggle('on',cb.checked);
+    sel.onclick=e=>e.stopPropagation();
+    sel.onchange=()=>{cb.checked=true;l.classList.add('on');};
+  });
+}
+function pintarExtras(){
+  document.getElementById('sv-extras').innerHTML=servExtras.map((e,i)=>`<span class="sv-extra">${e}<b onclick="quitarExtra(${i})">✕</b></span>`).join('');
+  setOpts(document.getElementById('dlExtras'),extrasTodos().map(e=>`<option>${e}</option>`).join(''));
+}
+function quitarExtra(i){servExtras.splice(i,1);pintarExtras();}
+function agregarExtra(){const inp=document.getElementById('sv-extra-in');const v=inp.value.trim();if(!v)return;if(!servExtras.some(x=>x.toLowerCase()===v.toLowerCase()))servExtras.push(v);inp.value='';pintarExtras();}
+document.getElementById('sv-extra-in').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();agregarExtra();}});
+document.getElementById('sv-extra-in').addEventListener('change',agregarExtra);
+function abrirServ(id,impId){
+  const s=id?DB.servicios.find(x=>x.id===id):null;
+  servEditId=s?s.id:null;servExtras=s?[...(s.extras||[])]:[];
+  document.getElementById('modalServTitle').textContent=s?'Editar servicio':'Cargar servicio';
+  const sel=document.getElementById('sv-imp');
+  const imps=[...DB.implementos].sort((a,b)=>(a.activo===b.activo?0:(a.activo?-1:1))||(a.menor-b.menor)||a.nombre.localeCompare(b.nombre,'es'));
+  if(!imps.length){alert('Primero cargá un implemento con "+ Implemento".');return;}
+  sel.innerHTML=imps.map(i=>`<option value="${i.id}">${i.nombre}${i.activo?'':' (inactivo)'}</option>`).join('');
+  sel.value=s?s.imp:(impId||imps[0].id);
+  document.getElementById('sv-fecha').value=s?(s.fecha||hoyISO()):hoyISO();
+  document.getElementById('sv-horas').value=s&&s.horas!=null?s.horas:'';
+  document.getElementById('sv-obs').value=s?(s.obs||''):'';
+  pintarTildes(s?s.t:{});pintarExtras();
+  modalServ.classList.add('open');
+}
+function cerrarModalServ(){modalServ.classList.remove('open');servEditId=null;servExtras=[];}
+document.getElementById('sv-guardar').onclick=()=>{
+  agregarExtra();
+  const imp=document.getElementById('sv-imp').value,fecha=document.getElementById('sv-fecha').value;
+  if(!imp||!fecha){alert('Elegí implemento y fecha.');return;}
+  const hv=document.getElementById('sv-horas').value;const horas=hv===''?null:Number(hv);
+  const t={};document.querySelectorAll('#modalServ .sv-chk').forEach(l=>{if(l.querySelector('input').checked){const v=l.querySelector('select').value;t[l.dataset.k]=v==='1'?true:v;}});
+  const obs=document.getElementById('sv-obs').value.trim();
+  if(!Object.keys(t).length&&!servExtras.length&&!obs){alert('Marcá al menos una tarea, agregá otra tarea o escribí una observación.');return;}
+  const datos={imp,fecha,horas,t,extras:[...servExtras],obs};
+  if(servEditId){Object.assign(DB.servicios.find(x=>x.id===servEditId),datos);}else DB.servicios.unshift({id:uid(),...datos});
+  DB.save();cerrarModalServ();renderServicios();
+};
+function borrarServ(id){
+  const s=DB.servicios.find(x=>x.id===id);if(!s)return;
+  if(!confirm('¿Borrar el servicio del '+fmtFechaISO(s.fecha)+' de '+impNombre(s.imp)+'?'))return;
+  DB.servicios=DB.servicios.filter(x=>x.id!==id);DB.save();renderServicios();
+}
+document.getElementById('btnNuevoServicio').onclick=()=>abrirServ(null,svImp.value||null);
+// ----- PDF (mismo encabezado que los demás) -----
+function pdfServicios(impId){
+  const lista=(impId?DB.servicios.filter(s=>s.imp===impId):serviciosFiltrados()).slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+  if(!lista.length){alert('No hay servicios para incluir en el PDF.');return;}
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape'});
+  if(LOGO_URI){try{doc.addImage(LOGO_URI,'PNG',255,10,26,26);}catch(e){}}
+  doc.setFontSize(16);doc.setFont(undefined,'bold');
+  doc.text('El Mestizo — Servicios de mantenimiento',14,18);
+  doc.setFontSize(11);doc.setFont(undefined,'normal');
+  let y=26;
+  const unImp=impId?DB.implementos.find(i=>i.id===impId):null;
+  const filtroTxt=svImp.value?impNombre(svImp.value):(svEstado.value==='act'?'implementos activos':svEstado.value==='inact'?'vendidos / inactivos':'todos los implementos');
+  const rango=(svDesde.value?' desde '+fmtFechaISO(svDesde.value):'')+(svHasta.value?' hasta '+fmtFechaISO(svHasta.value):'');
+  doc.text(unImp?('Implemento: '+unImp.nombre+(unImp.activo?'':' (vendido / inactivo)')):('Filtro: '+filtroTxt+rango),14,y);y+=6;
+  doc.text('Fecha: '+new Date().toLocaleDateString('es-AR')+'  ·  '+lista.length+' servicio(s)',14,y);y+=6;
+  const cel=(s,k)=>{const v=s.t&&s.t[k];return v===true?'✓':(v||'');};
+  const head=[[{content:'Fecha',rowSpan:2},...(unImp?[]:[{content:'Implemento',rowSpan:2}]),{content:'Horas',rowSpan:2},{content:'Aceite',colSpan:4},{content:'Filtro aceite',colSpan:4},{content:'F. gas-oil',rowSpan:2},{content:'F. aire',rowSpan:2},{content:'Otras tareas',rowSpan:2},{content:'Observaciones',rowSpan:2}],
+    ['Mot.','Caj.','Dif.','Hid.','Mot.','Caj.','Dif.','Hid.']];
+  const base=unImp?0:1;
+  const cols={0:{halign:'left'}};if(!unImp)cols[1]={halign:'left',cellWidth:48};cols[base+12]={halign:'left',cellWidth:50};cols[base+13]={halign:'left',cellWidth:60};
+  doc.autoTable({
+    startY:y+2,head,
+    body:lista.map(s=>[fmtFechaISO(s.fecha),...(unImp?[]:[impNombre(s.imp)]),s.horas!=null&&s.horas!==''?Number(s.horas).toLocaleString('es-AR'):'',cel(s,'aM'),cel(s,'aC'),cel(s,'aD'),cel(s,'aH'),cel(s,'fM'),cel(s,'fC'),cel(s,'fD'),cel(s,'fH'),cel(s,'gas'),cel(s,'aire'),(s.extras||[]).join(', '),s.obs||'']),
+    styles:{fontSize:8,cellPadding:2,halign:'center'},
+    headStyles:{fillColor:[46,125,50],textColor:255,halign:'center'},
+    alternateRowStyles:{fillColor:[245,247,244]},
+    columnStyles:cols,
+    margin:{left:14,right:14}
+  });
+  doc.save('servicios-'+(unImp?unImp.nombre.replace(/[^\w\-]+/g,'_'):'filtrado')+'-'+hoyISO()+'.pdf');
+}
+document.getElementById('btnSvPdf').onclick=()=>pdfServicios(svImp.value||null);
+
 function redibujarTodo(){
   setTC(DB.tc);
   refreshFilters();renderPiezas();renderPedido();renderBadge();
-  renderCot();renderComp();renderCompra();renderStock();renderMovs();
+  renderCot();renderComp();renderCompra();renderStock();renderMovs();renderServicios();
 }
 function normalizar(){
   if(!Array.isArray(DB.piezas))DB.piezas=[];
   if(!DB.stock||typeof DB.stock!=='object')DB.stock={};
   if(!Array.isArray(DB.movs))DB.movs=[];
+  if(!Array.isArray(DB.implementos))DB.implementos=[];
+  if(!Array.isArray(DB.servicios))DB.servicios=[];
+  DB.implementos.forEach(i=>{if(typeof i.activo!=='boolean')i.activo=true;if(typeof i.menor!=='boolean')i.menor=false;});
   if(!DB.nrosReservados||typeof DB.nrosReservados!=='object')DB.nrosReservados={};
   if(!Array.isArray(DB.pedido))DB.pedido=[];
   if(!Array.isArray(DB.cots))DB.cots=[];
@@ -2088,7 +2397,8 @@ function aplicarDatosNube(d){
     tc:d.tc||DB.tc, ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||(d.ordenSeq||1),
     ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'',
     nrosReservados:(d.nrosReservados&&typeof d.nrosReservados==='object')?d.nrosReservados:{},
-    stock:(d.stock&&typeof d.stock==='object')?d.stock:{}, movs:Array.isArray(d.movs)?d.movs:[]
+    stock:(d.stock&&typeof d.stock==='object')?d.stock:{}, movs:Array.isArray(d.movs)?d.movs:[],
+    implementos:Array.isArray(d.implementos)?d.implementos:[], servicios:Array.isArray(d.servicios)?d.servicios:[]
   });
   DB._rev=Math.max(Number(DB._rev)||0,Number(d.rev)||0); // ahora conozco esta versión
   normalizar(); // saneo en memoria; se persiste con el próximo guardado del usuario (nunca desde acá)
@@ -2108,6 +2418,7 @@ onValue(raizRef, snap=>{
   }
   if(!DB._ready){
     DB._ready=true;
+    if(sembrarHistoricoServicios()){DB.save();renderServicios();}
     traerTC().then(tc=>{if(tc){DB.tc=tc;DB.save();setTC(tc);renderCot();renderComp();renderCompra();}});
     redibujarTodo();
   }
@@ -2127,7 +2438,8 @@ Object.assign(window,{
   asignarProvPedido, quitarProvPedido, generarPDFProveedor,
   togglePickProv, cerrarModalProv, setQtyCompra, setQtyChosen, exportarPDFCompraProv,
   editarCot, cerrarModalCot, toggleRecibido, togglePasadoProv, csvCerradoProv, toggleDetalleCerrado, togglePendSuma,
-  abrirMov, editarMov, borrarMov, cerrarModalMov
+  abrirMov, editarMov, borrarMov, cerrarModalMov,
+  abrirServ, borrarServ, cerrarModalServ, quitarExtra, abrirImp, editarImp, cerrarModalImp, toggleImp, borrarImp, pdfServicios
 });
 </script>
 </body>
