@@ -510,7 +510,7 @@
       <div class="grid-2">
         <div class="field"><label>Tipo</label>
           <select id="mv-tipo"><option value="E">Entrada (+)</option><option value="S">Salida (−)</option></select></div>
-        <div class="field"><label>Cantidad</label><input id="mv-cant" type="number" min="1" step="1" value="1"></div>
+        <div class="field"><label id="mv-cant-label">Cantidad</label><input id="mv-cant" type="number" min="0.01" step="any" value="1"></div>
       </div>
       <div class="grid-2">
         <div class="field"><label>Fecha</label><input id="mv-fecha" type="date"></div>
@@ -540,6 +540,12 @@
     <div class="grid-2">
       <div class="field"><label>Código original</label><input id="mCodO" placeholder="Ej: 87312345"></div>
       <div class="field"><label>Código alternativo</label><input id="mCodA" placeholder="Ej: SKF-6205"></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Se controla en stock por</label>
+        <select id="mUnidad"><option value="">Unidades (piezas)</option><option value="L">Litros</option><option value="kg">Kilos</option><option value="m">Metros</option></select></div>
+      <div class="field" id="mEnvaseWrap" style="display:none"><label>Contenido por envase (lo que viene en cada lata/tambor)</label>
+        <input id="mEnvase" type="number" step="0.01" min="0" placeholder="Ej: 200 (tambor de 200 L)"></div>
     </div>
     <datalist id="dlMarca"></datalist><datalist id="dlImpl"></datalist><datalist id="dlCat"></datalist>
     <div class="modal-actions">
@@ -618,7 +624,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.11.04-6';
+const APP_VERSION='v2026.11.05-1';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -842,7 +848,7 @@ document.getElementById('btnNuevaPieza').onclick=()=>{
   document.getElementById('modalPiezaTitle').textContent='Cargar pieza al catálogo';
   document.getElementById('mGuardar').textContent='Guardar pieza';
   document.getElementById('mGuardarPedido').style.display=''; // visible al crear
-  ['mMarca','mImpl','mCat','mDesc','mCodO','mCodA'].forEach(i=>document.getElementById(i).value='');
+  ['mMarca','mImpl','mCat','mDesc','mCodO','mCodA','mEnvase'].forEach(i=>document.getElementById(i).value='');document.getElementById('mUnidad').value='';toggleEnvase();
   refreshDlImpl(); // sugerencias de implemento según la marca
   modal.classList.add('open');
 };
@@ -853,14 +859,23 @@ function editPieza(id){
   document.getElementById('mGuardar').textContent='Guardar cambios';
   document.getElementById('mGuardarPedido').style.display='none'; // oculto al editar
   mMarca.value=p.marca;mImpl.value=p.impl;mCat.value=p.cat;mDesc.value=p.desc;mCodO.value=p.codO;mCodA.value=p.codA;
+  document.getElementById('mUnidad').value=p.unidad||'';document.getElementById('mEnvase').value=p.envase||'';toggleEnvase();
   refreshDlImpl(); // sugerencias de implemento según la marca
   modal.classList.add('open');
 }
 function closeModal(){modal.classList.remove('open')}
 modal.onclick=e=>{if(e.target===modal)closeModal()};
+// unidades de medida: '' = piezas; 'L','kg','m' = a granel (el envase comprado se convierte a esa unidad)
+function nombreUnidad(u){return u==='L'?'litros':u==='kg'?'kilos':u==='m'?'metros':'unidades';}
+function abrevUnidad(u){return u||'u';}
+function fmtCant(n,u){const v=Number(n)||0;return (u?v.toLocaleString('es-AR',{maximumFractionDigits:2}):String(Math.round(v)))+(u?' '+u:'');}
+function toggleEnvase(){const u=document.getElementById('mUnidad').value;document.getElementById('mEnvaseWrap').style.display=u?'':'none';}
+document.getElementById('mUnidad').onchange=toggleEnvase;
 function guardarPiezaModal(){
   const datos={marca:mMarca.value.trim(),impl:mImpl.value.trim(),cat:mCat.value.trim(),
-    desc:mDesc.value.trim(),codO:mCodO.value.trim(),codA:mCodA.value.trim()};
+    desc:mDesc.value.trim(),codO:mCodO.value.trim(),codA:mCodA.value.trim(),
+    unidad:document.getElementById('mUnidad').value||'',envase:Number(document.getElementById('mEnvase').value)||0};
+  if(datos.unidad&&!(datos.envase>0)){alert('Si se controla por '+nombreUnidad(datos.unidad)+', indicá cuánto trae cada envase (ej: 200 para un tambor de 200 L).');return null}
   if(!datos.desc||!datos.marca){alert('Marca y descripción son obligatorias.');return null}
   let pid;
   if(editPiezaId){
@@ -1458,7 +1473,7 @@ function toggleRecibido(id){
   const marcando=!o.recibido;
   o.recibido=marcando;
   if(marcando&&!o.stockCargado&&Array.isArray(o.items)&&o.items.length){
-    const detalle=o.items.map(e=>'  • '+(e.qty||0)+' × '+(e.desc||'')+(e.impl?' ('+e.impl+')':'')).join('\n');
+    const detalle=o.items.map(e=>{const p=DB.piezas.find(x=>x.id===e.piezaId);const g=p&&p.unidad&&Number(p.envase)>0;return '  • '+(e.qty||0)+' × '+(e.desc||'')+(g?'  →  '+fmtCant((e.qty||0)*Number(p.envase),p.unidad):'')+(e.impl?' ('+e.impl+')':'');}).join('\n');
     if(confirm('Orden '+ordenCod(o.nro)+' de '+(o.proveedor||'')+' marcada como RECIBIDA.\n\n¿Cargar estas piezas al STOCK?\n\n'+detalle+'\n\nAceptar = entran al stock. Cancelar = queda recibida pero sin tocar el stock.')){
       const r=ingresarOrdenAStock(o);
       o.stockCargado=true;
@@ -1479,9 +1494,12 @@ function ingresarOrdenAStock(o){
       DB.piezas.unshift(p);nuevas.push(p.desc);
     }
     const q=Number(e.qty)||0;if(q<=0)return;
-    DB.stock[p.id]=(Number(DB.stock[p.id])||0)+q;
-    DB.movs.unshift({id:uid(),piezaId:p.id,tipo:'E',cant:q,fecha:hoy,impl:'',nota:'Recibido '+ordenCod(o.nro)+' · '+(o.proveedor||''),orden:o.nro});
-    lineas.push('  • +'+q+' '+p.desc+' → stock: '+DB.stock[p.id]);
+    // si la pieza se controla a granel, cada envase comprado suma su contenido (ej: 2 tambores × 200 L = 400 L)
+    const granel=p.unidad&&Number(p.envase)>0;
+    const cant=granel?q*Number(p.envase):q;
+    DB.stock[p.id]=(Number(DB.stock[p.id])||0)+cant;
+    DB.movs.unshift({id:uid(),piezaId:p.id,tipo:'E',cant,fecha:hoy,impl:'',nota:'Recibido '+ordenCod(o.nro)+' · '+(o.proveedor||'')+(granel?' · '+q+' envase(s) × '+fmtCant(p.envase,p.unidad):''),orden:o.nro});
+    lineas.push('  • +'+fmtCant(cant,p.unidad)+(granel?' ('+q+' × '+fmtCant(p.envase,p.unidad)+')':'')+' '+p.desc+' → stock: '+fmtCant(DB.stock[p.id],p.unidad));
   });
   return {lineas,nuevas};
 }
@@ -1964,13 +1982,13 @@ function pdfStock(lista,subtitulo,nombre){
   let y=26;
   if(subtitulo){doc.text(subtitulo,14,y);y+=6;}
   doc.text('Fecha: '+new Date().toLocaleDateString('es-AR'),14,y);y+=6;
-  const unidades=lista.reduce((s,p)=>s+stockDe(p.id),0);
-  doc.text('Piezas: '+lista.length+'  ·  Unidades: '+unidades,14,y);y+=6;
+  const unidades=lista.filter(p=>!p.unidad).reduce((s,p)=>s+stockDe(p.id),0);
+  doc.text('Piezas: '+lista.length+'  ·  Unidades (piezas): '+unidades,14,y);y+=6;
   const orden=[...lista].sort((a,b)=>(a.marca||'').localeCompare(b.marca||'','es')||(a.impl||'').localeCompare(b.impl||'','es')||(a.desc||'').localeCompare(b.desc||'','es'));
   doc.autoTable({
     startY:y+2,
     head:[['Marca','Implemento','Pieza','Cód. original','Cód. alternativo','Stock']],
-    body:orden.map(p=>[p.marca||'',p.impl||'',p.desc||'',p.codO||'',p.codA||'',String(stockDe(p.id))]),
+    body:orden.map(p=>[p.marca||'',p.impl||'',p.desc||'',p.codO||'',p.codA||'',fmtCant(stockDe(p.id),p.unidad)]),
     styles:{fontSize:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
@@ -1993,11 +2011,11 @@ function renderStock(){
   const i=sImpl.value;const pmi=i?pm.filter(p=>p.impl===i):pm;
   fillSelect(sCat,uniq(pmi.map(p=>p.cat)),'Todas las categorías');
   const lista=stockFiltrado(pmi);
-  const totalPiezas=DB.piezas.length,conStock=DB.piezas.filter(p=>stockDe(p.id)>0).length,unidades=DB.piezas.reduce((s,p)=>s+stockDe(p.id),0);
+  const totalPiezas=DB.piezas.length,conStock=DB.piezas.filter(p=>stockDe(p.id)>0).length,unidades=DB.piezas.filter(p=>!p.unidad).reduce((s,p)=>s+stockDe(p.id),0);
   document.getElementById('stockStats').innerHTML=`
     <div class="stat"><div class="n">${totalPiezas}</div><div class="l">Piezas en catálogo</div></div>
     <div class="stat"><div class="n">${conStock}</div><div class="l">Con existencia</div></div>
-    <div class="stat"><div class="n">${unidades}</div><div class="l">Unidades totales</div></div>`;
+    <div class="stat"><div class="n">${unidades}</div><div class="l">Unidades totales (piezas)</div></div>`;
   if(!lista.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">No hay piezas que coincidan.</div></td></tr>`;return}
   tb.innerHTML=lista.map(p=>{
     const st=stockDe(p.id);const um=ultimoMov(p.id);
@@ -2006,8 +2024,8 @@ function renderStock(){
       <td>${p.impl||''}</td>
       <td><b>${p.desc}</b>${p.cat?`<br><span class="pill cat" style="font-size:10px">${p.cat}</span>`:''}</td>
       <td class="mono" style="font-size:12px">${p.codO||'—'}${p.codA?`<br><span style="color:var(--muted)">${p.codA}</span>`:''}</td>
-      <td class="right price" style="font-size:18px;color:${st>0?'var(--green-bright)':'var(--muted)'}">${st}</td>
-      <td style="font-size:12px;color:var(--muted)">${um?(um.tipo==='E'?'+':'−')+um.cant+' · '+fmtFechaISO(um.fecha):'—'}</td>
+      <td class="right price" style="font-size:18px;color:${st>0?'var(--green-bright)':'var(--muted)'}">${fmtCant(st,p.unidad)}${p.unidad&&p.envase?`<br><span style="font-size:10px;color:var(--muted);font-weight:400">envase ${fmtCant(p.envase,p.unidad)}</span>`:''}</td>
+      <td style="font-size:12px;color:var(--muted)">${um?(um.tipo==='E'?'+':'−')+fmtCant(um.cant,p.unidad)+' · '+fmtFechaISO(um.fecha):'—'}</td>
       <td class="right" style="white-space:nowrap">
         <button class="btn sm" onclick="abrirMov('${p.id}','E')" title="Cargar entrada">+ Entrada</button>
         <button class="btn ghost sm" onclick="abrirMov('${p.id}','S')" title="Registrar salida/uso" ${st<=0?'disabled style="opacity:.4"':''}>− Salida</button>
@@ -2021,7 +2039,8 @@ function abrirMov(pid,tipo){
   const p=DB.piezas.find(x=>x.id===pid);if(!p)return;
   movEditId=null;movPiezaId=pid;
   document.getElementById('modalMovTitle').textContent=(tipo==='E'?'Entrada':'Salida')+' de stock';
-  document.getElementById('modalMovPieza').textContent=p.desc+' · stock actual: '+stockDe(pid);
+  document.getElementById('modalMovPieza').textContent=p.desc+' · stock actual: '+fmtCant(stockDe(pid),p.unidad);
+  document.getElementById('mv-cant-label').textContent='Cantidad'+(p.unidad?' ('+nombreUnidad(p.unidad)+')':'');
   document.getElementById('mv-tipo').value=tipo;
   document.getElementById('mv-cant').value=1;
   document.getElementById('mv-fecha').value=hoyISO();
@@ -2034,7 +2053,8 @@ function editarMov(id){
   const p=DB.piezas.find(x=>x.id===mv.piezaId);
   movEditId=id;movPiezaId=mv.piezaId;
   document.getElementById('modalMovTitle').textContent='Editar movimiento';
-  document.getElementById('modalMovPieza').textContent=(p?p.desc:'(pieza eliminada)')+' · stock actual: '+stockDe(mv.piezaId);
+  document.getElementById('modalMovPieza').textContent=(p?p.desc:'(pieza eliminada)')+' · stock actual: '+fmtCant(stockDe(mv.piezaId),p&&p.unidad);
+  document.getElementById('mv-cant-label').textContent='Cantidad'+(p&&p.unidad?' ('+nombreUnidad(p.unidad)+')':'');
   document.getElementById('mv-tipo').value=mv.tipo;
   document.getElementById('mv-cant').value=mv.cant;
   document.getElementById('mv-fecha').value=mv.fecha||hoyISO();
@@ -2045,7 +2065,10 @@ function editarMov(id){
 function cerrarModalMov(){modalMov.classList.remove('open');movEditId=null;movPiezaId=null;}
 document.getElementById('mv-guardar').onclick=()=>{
   const tipo=document.getElementById('mv-tipo').value;
-  const cant=Math.floor(Number(document.getElementById('mv-cant').value)||0);
+  const pz=DB.piezas.find(x=>x.id===movPiezaId);
+  let cant=Number(document.getElementById('mv-cant').value)||0;
+  if(!(pz&&pz.unidad))cant=Math.floor(cant); // piezas: enteros; a granel: decimales
+  cant=Math.round(cant*100)/100;
   const fecha=document.getElementById('mv-fecha').value||hoyISO();
   const impl=document.getElementById('mv-impl').value.trim();
   const nota=document.getElementById('mv-nota').value.trim();
@@ -2097,7 +2120,7 @@ function renderMovs(){
       <td>${fmtFechaISO(mv.fecha)}</td>
       <td><span class="flag ${esE?'ars':'usd'}" style="${esE?'background:#15331f;color:#6fd38a':'background:#33270f;color:var(--amber)'}">${esE?'ENTRADA':'SALIDA'}</span></td>
       <td>${p?`<b>${p.desc}</b>${p.impl?`<br><span style="color:var(--muted);font-size:11px">${p.impl}</span>`:''}`:'<span style="color:var(--muted)">(pieza eliminada)</span>'}</td>
-      <td class="right price" style="color:${esE?'var(--green-bright)':'var(--amber)'}">${esE?'+':'−'}${mv.cant}</td>
+      <td class="right price" style="color:${esE?'var(--green-bright)':'var(--amber)'}">${esE?'+':'−'}${fmtCant(mv.cant,p&&p.unidad)}</td>
       <td>${mv.impl||'—'}</td>
       <td style="font-size:12px;color:var(--muted)">${mv.nota||''}</td>
       <td class="right" style="white-space:nowrap">
@@ -2110,8 +2133,8 @@ document.getElementById('btnMovCsv').onclick=()=>{
   const lista=movsFiltrados();
   if(!lista.length){alert('No hay movimientos para exportar.');return;}
   const esc=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-  const filas=[['fecha','tipo','pieza','marca','implemento_pieza','cod_original','cod_alternativo','cantidad','implemento_destino','nota']];
-  lista.forEach(mv=>{const p=DB.piezas.find(x=>x.id===mv.piezaId)||{};filas.push([fmtFechaISO(mv.fecha),mv.tipo==='E'?'ENTRADA':'SALIDA',p.desc||'',p.marca||'',p.impl||'',p.codO||'',p.codA||'',mv.cant,mv.impl||'',mv.nota||'']);});
+  const filas=[['fecha','tipo','pieza','marca','implemento_pieza','cod_original','cod_alternativo','cantidad','unidad','implemento_destino','nota']];
+  lista.forEach(mv=>{const p=DB.piezas.find(x=>x.id===mv.piezaId)||{};filas.push([fmtFechaISO(mv.fecha),mv.tipo==='E'?'ENTRADA':'SALIDA',p.desc||'',p.marca||'',p.impl||'',p.codO||'',p.codA||'',mv.cant,abrevUnidad(p.unidad),mv.impl||'',mv.nota||'']);});
   const csv='\ufeff'+filas.map(r=>r.map(esc).join(';')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='movimientos-stock-'+hoyISO()+'.csv';a.click();
 };
