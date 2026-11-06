@@ -529,7 +529,7 @@
       </div>
       <div class="grid-2">
         <div class="field"><label>Fecha</label><input id="mv-fecha" type="date"></div>
-        <div class="field"><label>Implemento / destino</label><input id="mv-impl" list="dlImpl" placeholder="Ej: Cosechadora CR 6.80"></div>
+        <div class="field"><label>Implemento / destino</label><input id="mv-impl" list="dlImplStock" placeholder="Elegí del catálogo o escribí uno nuevo"><datalist id="dlImplStock"></datalist></div>
       </div>
       <div class="field"><label>Nota (opcional)</label><input id="mv-nota" placeholder="Ej: cambio de filtro, reposición..."></div>
       <div class="modal-actions">
@@ -639,7 +639,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.11.05-2';
+const APP_VERSION='v2026.11.06-1';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -778,7 +778,7 @@ function refreshFilters(){
   const piezasMI=i?piezasM.filter(p=>p.impl===i):piezasM;
   fillSelect(fCat,uniq(piezasMI.map(p=>p.cat)),'Todas las categorías');
   setOpts(dlMarca,uniq(DB.piezas.map(p=>p.marca)).map(v=>`<option>${v}</option>`).join(''));
-  refreshDlImpl();
+  refreshDlImpl();refreshDlImplStock();
   setOpts(dlCat,uniq(DB.piezas.map(p=>p.cat)).map(v=>`<option>${v}</option>`).join(''));
 }
 // sugerencias de implemento en el formulario de pieza: solo los de la marca escrita
@@ -797,6 +797,11 @@ function implementosTodos(){
   const usados=uniq(DB.piezas.map(p=>p.impl).concat((DB.implementos||[]).map(i=>i.nombre))).filter(Boolean);
   const lower=new Set(usados.map(x=>x.trim().toLowerCase()));
   return usados.concat(IMPLEMENTOS_BASE.filter(x=>!lower.has(x.trim().toLowerCase()))).sort((a,b)=>a.localeCompare(b,'es'));
+}
+// sugerencias de implemento para entradas/salidas de stock: SOLO los del catálogo de piezas (se actualiza con el catálogo)
+function refreshDlImplStock(){
+  const el=document.getElementById('dlImplStock');if(!el)return;
+  setOpts(el,uniq(DB.piezas.map(p=>p.impl)).filter(Boolean).map(v=>`<option>${v}</option>`).join(''));
 }
 function refreshDlImpl(){
   const m=(document.getElementById('mMarca').value||'').trim().toLowerCase();
@@ -2088,6 +2093,7 @@ function abrirMov(pid,tipo){
   document.getElementById('mv-fecha').value=hoyISO();
   document.getElementById('mv-impl').value=tipo==='S'?(p.impl||''):'';
   document.getElementById('mv-nota').value='';
+  refreshDlImplStock();
   modalMov.classList.add('open');
 }
 function editarMov(id){
