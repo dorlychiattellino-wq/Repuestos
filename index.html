@@ -560,8 +560,13 @@
       <div class="grid-2">
         <div class="field"><label>Tipo</label>
           <select id="mv-tipo"><option value="E">Entrada (+)</option><option value="S">Salida (−)</option><option value="T">Cambio de depósito (⇄)</option></select></div>
-        <div class="field"><label id="mv-cant-label">Cantidad</label><input id="mv-cant" type="number" min="0.01" step="any" value="1"></div>
+        <div class="field" style="min-width:0"><label id="mv-cant-label">Cantidad</label>
+          <div style="display:flex;gap:6px;min-width:0"><input id="mv-cant" type="number" min="0.01" step="any" value="1" style="flex:1 1 0;min-width:0;width:0">
+          <select id="mv-unid" title="En qué se mide esta pieza en el stock" style="flex:0 0 108px;width:108px;min-width:0"><option value="">unidades</option><option value="L">litros</option><option value="kg">kilos</option><option value="m">metros</option></select></div></div>
       </div>
+      <div class="field" id="mv-env-wrap" style="display:none"><label>Cantidad de envases (bidones, latas, tambores) — opcional</label>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input id="mv-env" type="number" min="0" step="1" placeholder="Ej: 5" style="width:120px">
+        <span id="mv-env-info" style="color:var(--muted);font-size:12px"></span></div></div>
       <div class="grid-2">
         <div class="field"><label>Fecha</label><input id="mv-fecha" type="date"></div>
         <div class="field"><label id="mv-dep-label">Depósito</label><input id="mv-dep" list="dlDep" placeholder="Elegí o escribí uno nuevo (vacío = sin depósito)"></div>
@@ -678,7 +683,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.11.15-1';
+const APP_VERSION='v2026.11.16-2';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -1527,11 +1532,31 @@ function renderCerrados(){
     return fila;
   }).join('');
 }
+// entradas de stock que generó una orden al marcarla recibida
+function movsDeOrden(o){return DB.movs.filter(m=>m.tipo==='E'&&(m.ordenId===o.id||(m.orden!==undefined&&m.orden===o.nro)));}
 function toggleRecibido(id){
   const o=DB.cerrados.find(x=>x.id===id);if(!o)return;
   const marcando=!o.recibido;
+  if(!marcando){
+    // al destildar: ofrecer sacar del stock lo que entró con esta orden
+    const ms=movsDeOrden(o);
+    if(ms.length&&confirm('Vas a marcar '+ordenCod(o.nro)+' como NO recibida.\n\nEsta orden cargó '+ms.length+' entrada(s) al stock. ¿Sacarlas también del stock?\n\nAceptar = se quitan del stock (después podés volver a marcar Recibido y cargarlas bien).\nCancelar = el stock queda como está.')){
+      const ids=new Set(ms.map(m=>m.id));const movsSim=DB.movs.filter(m=>!ids.has(m.id));
+      const porPieza={};ms.forEach(m=>{porPieza[m.piezaId]=(porPieza[m.piezaId]||0)+(Number(m.cant)||0);});
+      const totales={};
+      for(const pid of Object.keys(porPieza)){
+        const p=DB.piezas.find(x=>x.id===pid);
+        totales[pid]=r2(stockDe(pid)-porPieza[pid]);
+        const err=validarDep(pid,movsSim,totales[pid],p&&p.unidad);
+        if(err){alert('No se pudo sacar del stock "'+(p?p.desc:'pieza')+'": parte de lo recibido ya se usó o se movió de depósito.\n\n'+err+'\n\nNo se cambió nada. Corregí esos movimientos en la pestaña Stock y volvé a intentar.');return;}
+      }
+      Object.keys(totales).forEach(pid=>{DB.stock[pid]=totales[pid];});
+      DB.movs=movsSim;
+    }
+  }
   o.recibido=marcando;
-  DB.save();renderCerrados();
+  o.stockCargado=movsDeOrden(o).length>0; // la ventana de carga se vuelve a abrir si la orden no tiene entradas en el stock
+  DB.save();renderCerrados();renderStock();renderMovs();
   if(marcando&&!o.stockCargado&&Array.isArray(o.items)&&o.items.length)abrirRecepcion(o.id);
 }
 // ventana para confirmar qué entra al stock al recibir una orden (permite poner litros/kilos en vez de envases)
@@ -1590,7 +1615,7 @@ function ingresarOrdenAStock(o,filas){
     const granel=!!p.unidad;
     const dep=f?(f.dep||''):'';
     DB.stock[p.id]=(Number(DB.stock[p.id])||0)+cant;
-    DB.movs.unshift({id:uid(),piezaId:p.id,tipo:'E',cant,fecha:hoy,impl:'',dep,nota:'Recibido '+ordenCod(o.nro)+' · '+(o.proveedor||'')+(granel?' · '+q+' envase(s)':''),orden:o.nro});
+    DB.movs.unshift({id:uid(),piezaId:p.id,tipo:'E',cant,fecha:hoy,impl:'',dep,nota:'Recibido '+ordenCod(o.nro)+' · '+(o.proveedor||'')+(granel?' · '+q+' envase(s)':''),orden:o.nro,ordenId:o.id});
     recordarDep(dep);
     lineas.push('  • +'+fmtCant(cant,p.unidad)+(granel?' ('+q+' envase(s))':'')+' '+p.desc+(dep?' → '+dep:'')+' · stock total: '+fmtCant(DB.stock[p.id],p.unidad));
   });
@@ -2230,6 +2255,18 @@ function infoPiezaMov(pid,p){
   const des=desgloseDep(depDePieza(pid),p&&p.unidad);
   return (p?p.desc:'(pieza eliminada)')+' · stock actual: '+fmtCant(stockDe(pid),p&&p.unidad)+(des?'  ('+des+')':'');
 }
+function ajustarUnidadMov(){
+  const u=document.getElementById('mv-unid').value,t=document.getElementById('mv-tipo').value;
+  document.getElementById('mv-cant-label').textContent='Cantidad'+(u?' ('+nombreUnidad(u)+' en total)':'');
+  document.getElementById('mv-env-wrap').style.display=(u&&t==='E')?'':'none';
+  const c=Number(document.getElementById('mv-cant').value)||0,e=Math.floor(Number(document.getElementById('mv-env').value)||0);
+  document.getElementById('mv-env-info').textContent=(u&&e>0&&c>0)?('= '+e+' envase(s) de '+fmtCant(r2(c/e),u)+' cada uno'):'';
+}
+document.getElementById('mv-unid').onchange=ajustarUnidadMov;
+document.getElementById('mv-env').oninput=ajustarUnidadMov;
+document.getElementById('mv-cant').addEventListener('input',ajustarUnidadMov);
+// texto de la nota de envases de un movimiento ("5 envase(s) de 5 L")
+function notaEnvases(mv,unidad){const e=Number(mv.envases)||0;return e>0?(e+' envase(s) de '+fmtCant(r2((Number(mv.cant)||0)/e),unidad)):'';}
 function ajustarModalMov(){
   const t=document.getElementById('mv-tipo').value;
   document.getElementById('mv-dep-label').textContent=t==='T'?'Depósito de origen':(t==='E'?'Depósito (dónde entra)':'Depósito (de dónde sale)');
@@ -2243,7 +2280,7 @@ function depConStock(pid){
   return ks.sort((a,b)=>m[b]-m[a])[0];
 }
 document.getElementById('mv-tipo').onchange=()=>{
-  ajustarModalMov();
+  ajustarModalMov();ajustarUnidadMov();
   if(!movEditId&&movPiezaId){const t=document.getElementById('mv-tipo').value;document.getElementById('mv-dep').value=t==='E'?ultimoDep():depConStock(movPiezaId);}
 };
 function abrirMov(pid,tipo){
@@ -2258,8 +2295,10 @@ function abrirMov(pid,tipo){
   document.getElementById('mv-impl').value=tipo==='S'?(p.impl||''):'';
   document.getElementById('mv-dep').value=tipo==='E'?ultimoDep():depConStock(pid);
   document.getElementById('mv-dep2').value='';
+  document.getElementById('mv-env').value='';
   document.getElementById('mv-nota').value='';
   refreshDlImplStock();refreshDlDep();ajustarModalMov();
+  document.getElementById('mv-unid').value=(p&&p.unidad)||'';ajustarUnidadMov();
   modalMov.classList.add('open');
 }
 function editarMov(id){
@@ -2275,8 +2314,10 @@ function editarMov(id){
   document.getElementById('mv-impl').value=mv.impl||'';
   document.getElementById('mv-dep').value=mv.dep||'';
   document.getElementById('mv-dep2').value=mv.dep2||'';
+  document.getElementById('mv-env').value=mv.envases||'';
   document.getElementById('mv-nota').value=mv.nota||'';
   refreshDlImplStock();refreshDlDep();ajustarModalMov();
+  document.getElementById('mv-unid').value=(p&&p.unidad)||'';ajustarUnidadMov();
   modalMov.classList.add('open');
 }
 function cerrarModalMov(){modalMov.classList.remove('open');movEditId=null;movPiezaId=null;}
@@ -2284,7 +2325,7 @@ const efectoMov=m=>m.tipo==='E'?(Number(m.cant)||0):(m.tipo==='S'?-(Number(m.can
 document.getElementById('mv-guardar').onclick=()=>{
   const pid=movPiezaId;if(!pid)return;
   const tipo=document.getElementById('mv-tipo').value;
-  const pz=DB.piezas.find(x=>x.id===pid);const unidad=pz&&pz.unidad;
+  const pz=DB.piezas.find(x=>x.id===pid);const unidad=document.getElementById('mv-unid').value; // la unidad elegida queda guardada en la pieza
   let cant=Number(document.getElementById('mv-cant').value)||0;
   if(!unidad)cant=Math.floor(cant); // piezas: enteros; a granel: decimales
   cant=r2(cant);
@@ -2298,11 +2339,14 @@ document.getElementById('mv-guardar').onclick=()=>{
     impl:tipo==='T'?'':document.getElementById('mv-impl').value.trim(),
     nota:document.getElementById('mv-nota').value.trim()});
   if(tipo==='T')nuevo.dep2=dep2;else delete nuevo.dep2;
+  const envases=(unidad&&tipo==='E')?Math.floor(Number(document.getElementById('mv-env').value)||0):0;
+  if(envases>0)nuevo.envases=envases;else delete nuevo.envases;
   const movsSim=DB.movs.filter(x=>x.id!==nuevo.id).concat([nuevo]);
   const totalSim=r2(stockDe(pid)-(ant?efectoMov(ant):0)+efectoMov(nuevo));
   const err=validarDep(pid,movsSim,totalSim,unidad);
   if(err){alert('No se puede guardar.\n\n'+err);return;}
   DB.stock[pid]=totalSim;
+  if(pz){pz.unidad=unidad;if(envases>0)pz.envase=r2(cant/envases);} // la pieza recuerda el contenido por envase
   if(ant)DB.movs[DB.movs.indexOf(ant)]=nuevo;else DB.movs.unshift(nuevo);
   recordarDep(dep);recordarDep(dep2);
   DB.save();cerrarModalMov();renderStock();renderMovs();
@@ -2433,7 +2477,7 @@ function renderMovs(){
       <td class="right price" style="color:${e[2]}">${e[3]}${fmtCant(mv.cant,p&&p.unidad)}</td>
       <td style="font-size:12px">${escH(depMovTxt(mv))||'—'}</td>
       <td>${mv.impl||'—'}</td>
-      <td style="font-size:12px;color:var(--muted)">${mv.nota||''}</td>
+      <td style="font-size:12px;color:var(--muted)">${[mv.nota,notaEnvases(mv,p&&p.unidad)].filter(Boolean).join(' · ')}</td>
       <td class="right" style="white-space:nowrap">
         <button class="btn ghost sm" onclick="editarMov('${mv.id}')" title="Editar">✎</button>
         <button class="btn danger sm" onclick="borrarMov('${mv.id}')" title="Borrar">✕</button>
@@ -2445,7 +2489,7 @@ document.getElementById('btnMovCsv').onclick=()=>{
   if(!lista.length){alert('No hay movimientos para exportar.');return;}
   const esc=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
   const filas=[['fecha','tipo','pieza','marca','implemento_pieza','cod_original','cod_alternativo','cantidad','unidad','deposito','deposito_destino','implemento_destino','nota']];
-  lista.forEach(mv=>{const p=DB.piezas.find(x=>x.id===mv.piezaId)||{};filas.push([fmtFechaISO(mv.fecha),mv.tipo==='E'?'ENTRADA':mv.tipo==='S'?'SALIDA':'TRASLADO',p.desc||'',p.marca||'',p.impl||'',p.codO||'',p.codA||'',mv.cant,abrevUnidad(p.unidad),mv.dep||'',mv.tipo==='T'?(mv.dep2||''):'',mv.impl||'',mv.nota||'']);});
+  lista.forEach(mv=>{const p=DB.piezas.find(x=>x.id===mv.piezaId)||{};filas.push([fmtFechaISO(mv.fecha),mv.tipo==='E'?'ENTRADA':mv.tipo==='S'?'SALIDA':'TRASLADO',p.desc||'',p.marca||'',p.impl||'',p.codO||'',p.codA||'',mv.cant,abrevUnidad(p.unidad),mv.dep||'',mv.tipo==='T'?(mv.dep2||''):'',mv.impl||'',[mv.nota,notaEnvases(mv,p.unidad)].filter(Boolean).join(' · ')]);});
   const csv='﻿'+filas.map(r=>r.map(esc).join(';')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='movimientos-stock-'+hoyISO()+'.csv';a.click();
 };
