@@ -393,6 +393,7 @@
       <div class="field"><label>Existencia</label>
         <select id="sExist"><option value="">Todas</option><option value="con">Con stock</option><option value="sin">Sin stock</option></select></div>
       <div class="field"><label>Depósito</label><select id="sDep"><option value="">Todos los depósitos</option></select></div>
+      <div class="field"><label>Marca del repuesto</label><select id="sMrc"><option value="">Todas las marcas</option></select></div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
       <button class="btn ghost sm" id="btnPdfStockTodo">📄 PDF stock completo</button>
@@ -421,7 +422,7 @@
     </div>
     <div class="card" style="padding:0;overflow:auto;margin-top:12px">
       <table id="tblMov">
-        <thead><tr><th>Fecha</th><th>Tipo</th><th>Pieza</th><th class="right">Cant.</th><th>Depósito</th><th>Implemento / destino</th><th>Nota</th><th class="right"></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Pieza</th><th class="right">Cant.</th><th>Marca rep.</th><th>Depósito</th><th>Implemento / destino</th><th>Nota</th><th class="right"></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -507,13 +508,13 @@
 
   <!-- modal de recepción de orden -> stock -->
   <div class="modal-bg" id="modalRecep">
-    <div class="modal" style="max-width:820px">
+    <div class="modal" style="max-width:960px">
       <h3 id="modalRecepTitle">Entrada al stock</h3>
       <p class="sub" style="margin-bottom:10px">Revisá qué entra al stock. Para aceites, grasas o refrigerantes poné los <b>litros o kilos totales</b> (no las latas) y elegí la unidad.</p>
       <div class="field" style="max-width:340px"><label>Depósito donde entra (se aplica a todas; podés cambiarlo por pieza)</label>
         <input id="rc-dep-todas" list="dlDep" placeholder="Elegí o escribí uno nuevo (vacío = sin depósito)"></div>
       <div style="overflow:auto"><table id="tblRecep">
-        <thead><tr><th>Pieza</th><th class="right">Comprado</th><th class="right">Entra al stock</th><th>Unidad</th><th>Depósito</th></tr></thead>
+        <thead><tr><th>Pieza</th><th class="right">Comprado</th><th class="right">Entra al stock</th><th>Unidad</th><th>Depósito</th><th>Marca del repuesto</th></tr></thead>
         <tbody></tbody>
       </table></div>
       <div class="modal-actions">
@@ -522,7 +523,7 @@
       </div>
     </div>
   </div>
-  <datalist id="dlDep"></datalist>
+  <datalist id="dlDep"></datalist><datalist id="dlMrc"></datalist>
   <!-- modal: cambiar varias piezas (o todas) de depósito -->
   <div class="modal-bg" id="modalTras">
     <div class="modal" style="max-width:860px">
@@ -571,6 +572,9 @@
         <div class="field"><label>Fecha</label><input id="mv-fecha" type="date"></div>
         <div class="field"><label id="mv-dep-label">Depósito</label><input id="mv-dep" list="dlDep" placeholder="Elegí o escribí uno nuevo (vacío = sin depósito)"></div>
       </div>
+      <div class="field"><label>Marca del repuesto (opcional)</label>
+        <input id="mv-mrc" list="dlMrc" placeholder="Ej: SKF, NTN, FAG... (elegí o escribí una nueva)">
+        <div id="mv-disp" style="color:var(--muted);font-size:12px;margin-top:4px"></div></div>
       <div class="grid-2">
         <div class="field" id="mv-dep2-wrap" style="display:none"><label>Depósito de destino</label><input id="mv-dep2" list="dlDep" placeholder="Elegí o escribí uno nuevo"></div>
         <div class="field" id="mv-impl-wrap"><label>Implemento / destino</label><input id="mv-impl" list="dlImplStock" placeholder="Elegí del catálogo o escribí uno nuevo"><datalist id="dlImplStock"></datalist></div>
@@ -683,7 +687,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.11.16-2';
+const APP_VERSION='v2026.11.17-1';
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
 
@@ -693,7 +697,7 @@ const DB={
   ordenSeq:1, ordenNro:1, ordenRef:'', cerrados:[],
   _ready:false, _ultimoGuardado:null, _rev:0, // _rev = versión de los datos que este dispositivo conoce
   // empaqueta solo los datos (sin funciones) para guardar
-  _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados,nrosReservados:this.nrosReservados||{},stock:this.stock||{},movs:this.movs||[],implementos:this.implementos||[],servicios:this.servicios||[],depositos:this.depositos||[]}},
+  _datos(){return {piezas:this.piezas,pedido:this.pedido,cots:this.cots,proveedores:this.proveedores,tc:this.tc,ordenSeq:this.ordenSeq,ordenNro:this.ordenNro,ordenRef:this.ordenRef,cerrados:this.cerrados,nrosReservados:this.nrosReservados||{},stock:this.stock||{},movs:this.movs||[],implementos:this.implementos||[],servicios:this.servicios||[],depositos:this.depositos||[],marcasRep:this.marcasRep||[]}},
   // quita listas/objetos vacíos y nulos, igual que hace Firebase al guardar, y ordena las claves:
   // así la huella de lo que mando y la de lo que vuelve del servidor coinciden
   _limpio(v){
@@ -708,7 +712,7 @@ const DB={
       proveedores:d.proveedores||[], tc:d.tc||1000,
       ordenSeq:d.ordenSeq||1, ordenNro:d.ordenNro||1,
       ordenRef:typeof d.ordenRef==='string'?d.ordenRef:'', cerrados:d.cerrados||[],
-      nrosReservados:d.nrosReservados||{}, stock:d.stock||{}, movs:d.movs||[], implementos:d.implementos||[], servicios:d.servicios||[], depositos:d.depositos||[]
+      nrosReservados:d.nrosReservados||{}, stock:d.stock||{}, movs:d.movs||[], implementos:d.implementos||[], servicios:d.servicios||[], depositos:d.depositos||[], marcasRep:d.marcasRep||[]
     })||{});
   },
   load(){/* la carga real la hace el listener onValue de abajo */},
@@ -1566,7 +1570,7 @@ function abrirRecepcion(id){
   recepOrdenId=id;
   document.getElementById('modalRecepTitle').textContent='Entrada al stock · '+ordenCod(o.nro)+(o.proveedor?' · '+o.proveedor:'');
   const tb=document.querySelector('#tblRecep tbody');
-  const depIni=ultimoDep();refreshDlDep();
+  const depIni=ultimoDep();refreshDlDep();refreshDlMrc();
   tb.innerHTML=o.items.map((e,i)=>{
     const p=DB.piezas.find(x=>x.id===e.piezaId)||DB.piezas.find(x=>(x.desc||'').trim().toLowerCase()===(e.desc||'').trim().toLowerCase()&&(x.codO||'')===(e.codO||''));
     const u=p&&p.unidad?p.unidad:'';const env=p&&Number(p.envase)>0?Number(p.envase):0;
@@ -1576,7 +1580,8 @@ function abrirRecepcion(id){
       <td class="right mono">${q}</td>
       <td class="right"><input class="qty rc-cant" type="number" min="0" step="any" value="${sug}" style="width:110px"></td>
       <td><select class="rc-unid"><option value="" ${u===''?'selected':''}>unidades</option><option value="L" ${u==='L'?'selected':''}>litros</option><option value="kg" ${u==='kg'?'selected':''}>kilos</option><option value="m" ${u==='m'?'selected':''}>metros</option></select></td>
-      <td><input class="rc-dep" list="dlDep" value="${escH(depIni)}" placeholder="Sin depósito" style="width:150px"></td>
+      <td><input class="rc-dep" list="dlDep" value="${escH(depIni)}" placeholder="Sin depósito" style="width:140px"></td>
+      <td><input class="rc-mrc" list="dlMrc" value="${escH(p?ultimaMrc(p.id):'')}" placeholder="Ej: SKF" style="width:120px"></td>
     </tr>`;
   }).join('');
   document.getElementById('rc-dep-todas').value=depIni;
@@ -1588,7 +1593,7 @@ document.getElementById('rc-omitir').onclick=()=>{cerrarRecepcion();};
 document.getElementById('rc-dep-todas').addEventListener('input',e=>{document.querySelectorAll('#tblRecep .rc-dep').forEach(i=>i.value=e.target.value);});
 document.getElementById('rc-guardar').onclick=()=>{
   const o=DB.cerrados.find(x=>x.id===recepOrdenId);if(!o){cerrarRecepcion();return;}
-  const filas=[...document.querySelectorAll('#tblRecep tbody tr')].map(tr=>({i:Number(tr.dataset.i),cant:Number(tr.querySelector('.rc-cant').value)||0,unidad:tr.querySelector('.rc-unid').value,dep:normDep(tr.querySelector('.rc-dep').value)}));
+  const filas=[...document.querySelectorAll('#tblRecep tbody tr')].map(tr=>({i:Number(tr.dataset.i),cant:Number(tr.querySelector('.rc-cant').value)||0,unidad:tr.querySelector('.rc-unid').value,dep:normDep(tr.querySelector('.rc-dep').value),mrc:normMrc(tr.querySelector('.rc-mrc').value)}));
   if(filas.some(f=>f.cant<0)){alert('Las cantidades no pueden ser negativas.');return;}
   const r=ingresarOrdenAStock(o,filas);
   o.stockCargado=true;
@@ -1613,11 +1618,13 @@ function ingresarOrdenAStock(o,filas){
     const cant=f?Math.round(f.cant*100)/100:q;
     if(cant<=0)return;
     const granel=!!p.unidad;
-    const dep=f?(f.dep||''):'';
+    const dep=f?(f.dep||''):'',mrc=f?(f.mrc||''):'';
     DB.stock[p.id]=(Number(DB.stock[p.id])||0)+cant;
-    DB.movs.unshift({id:uid(),piezaId:p.id,tipo:'E',cant,fecha:hoy,impl:'',dep,nota:'Recibido '+ordenCod(o.nro)+' · '+(o.proveedor||'')+(granel?' · '+q+' envase(s)':''),orden:o.nro,ordenId:o.id});
-    recordarDep(dep);
-    lineas.push('  • +'+fmtCant(cant,p.unidad)+(granel?' ('+q+' envase(s))':'')+' '+p.desc+(dep?' → '+dep:'')+' · stock total: '+fmtCant(DB.stock[p.id],p.unidad));
+    const mvE={id:uid(),piezaId:p.id,tipo:'E',cant,fecha:hoy,impl:'',dep,nota:'Recibido '+ordenCod(o.nro)+' · '+(o.proveedor||'')+(granel?' · '+q+' envase(s)':''),orden:o.nro,ordenId:o.id};
+    if(mrc)mvE.mrc=mrc;
+    DB.movs.unshift(mvE);
+    recordarDep(dep);recordarMrc(mrc);
+    lineas.push('  • +'+fmtCant(cant,p.unidad)+(granel?' ('+q+' envase(s))':'')+' '+p.desc+(mrc?' ('+mrc+')':'')+(dep?' → '+dep:'')+' · stock total: '+fmtCant(DB.stock[p.id],p.unidad));
   });
   return {lineas,nuevas};
 }
@@ -1960,7 +1967,7 @@ document.getElementById('btnBackup').onclick=()=>{
     proveedores:DB.proveedores, cerrados:DB.cerrados,
     tc:DB.tc, ordenSeq:DB.ordenSeq, ordenNro:DB.ordenNro, ordenRef:DB.ordenRef,
     nrosReservados:DB.nrosReservados||{},
-    stock:DB.stock||{}, movs:DB.movs||[], depositos:DB.depositos||[],
+    stock:DB.stock||{}, movs:DB.movs||[], depositos:DB.depositos||[], marcasRep:DB.marcasRep||[],
     implementos:DB.implementos||[], servicios:DB.servicios||[]
   };
   const blob=new Blob([JSON.stringify(datos,null,2)],{type:'application/json'});
@@ -1981,7 +1988,7 @@ document.getElementById('inputRestore').onchange=function(){
       DB.proveedores=d.proveedores||[]; DB.cerrados=d.cerrados||[];
       DB.tc=d.tc||DB.tc; DB.ordenSeq=d.ordenSeq||1; DB.ordenNro=d.ordenNro||DB.ordenSeq; DB.ordenRef=d.ordenRef||'';
       // stock, movimientos, depósitos y servicios: se restauran si la copia los trae (las copias viejas no los tenían y no los pisan)
-      ['nrosReservados','stock','movs','depositos','implementos','servicios'].forEach(k=>{if(k in d)DB[k]=d[k];});
+      ['nrosReservados','stock','movs','depositos','marcasRep','implementos','servicios'].forEach(k=>{if(k in d)DB[k]=d[k];});
       normalizar();
       DB.save();
       redibujarTodo();
@@ -2092,17 +2099,48 @@ function recordarDep(d){
 }
 function ultimoDep(){try{const d=localStorage.getItem('agrorep_ultimo_dep')||'';return depositosTodos().includes(d)?d:'';}catch(e){return '';}}
 function refreshDlDep(){const el=document.getElementById('dlDep');if(el)setOpts(el,depositosTodos().map(d=>`<option>${escH(d)}</option>`).join(''));}
-function acumMov(m,mv){
-  const c=Number(mv.cant)||0,d=mv.dep||'';
-  if(mv.tipo==='E')m[d]=(m[d]||0)+c;
-  else if(mv.tipo==='S')m[d]=(m[d]||0)-c;
-  else if(mv.tipo==='T'){m[d]=(m[d]||0)-c;const d2=mv.dep2||'';m[d2]=(m[d2]||0)+c;}
+// ----- marcas del repuesto (SKF, NTN...) -----
+// Cada movimiento puede llevar la marca del repuesto (mrc). El stock se lleva por depósito Y marca:
+// la clave interna es "depósito␁marca". '' = sin depósito / sin marca.
+const SIN_MRC='__SINMRC__';
+const KS='\u0001';
+function kDM(d,m){return (d||'')+KS+(m||'');}
+function splitK(k){const i=k.indexOf(KS);return i<0?[k,'']:[k.slice(0,i),k.slice(i+1)];}
+function normMrc(s){return String(s||'').trim().toUpperCase();}
+function nombreMrc(m){return m?m:'Sin marca';}
+function marcasRepTodas(){
+  const set=new Set((DB.marcasRep||[]).filter(Boolean));
+  DB.movs.forEach(m=>{if(m.mrc)set.add(m.mrc);});
+  return [...set].sort((a,b)=>a.localeCompare(b,'es'));
 }
-function cerrarDep(m,total){ // lo que no explican los movimientos queda en "sin depósito"; limpia ceros
+function recordarMrc(m){
+  if(!m)return;
+  if(!Array.isArray(DB.marcasRep))DB.marcasRep=[];
+  if(!DB.marcasRep.includes(m))DB.marcasRep.push(m);
+}
+function refreshDlMrc(){const el=document.getElementById('dlMrc');if(el)setOpts(el,marcasRepTodas().map(d=>`<option>${escH(d)}</option>`).join(''));}
+// última marca con la que entró una pieza (para precargar)
+function ultimaMrc(pid){const m=DB.movs.find(x=>x.piezaId===pid&&x.tipo==='E'&&x.mrc);return m?m.mrc:'';}
+function acumMov(m,mv){
+  const c=Number(mv.cant)||0,k=kDM(mv.dep,mv.mrc);
+  if(mv.tipo==='E')m[k]=(m[k]||0)+c;
+  else if(mv.tipo==='S')m[k]=(m[k]||0)-c;
+  else if(mv.tipo==='T'){m[k]=(m[k]||0)-c;const k2=kDM(mv.dep2,mv.mrc);m[k2]=(m[k2]||0)+c;}
+}
+function cerrarDep(m,total){ // lo que no explican los movimientos queda en "sin depósito / sin marca"; limpia ceros
   const suma=Object.values(m).reduce((s,v)=>s+v,0);
-  m['']=(m['']||0)+(total-suma);
+  const k0=kDM('','');m[k0]=(m[k0]||0)+(total-suma);
   Object.keys(m).forEach(k=>{m[k]=r2(m[k]);if(Math.abs(m[k])<0.005)delete m[k];});
   return m;
+}
+function agrupar(m2,pos){const o={};Object.keys(m2||{}).forEach(k=>{const x=splitK(k)[pos];o[x]=r2((o[x]||0)+m2[k]);});Object.keys(o).forEach(k=>{if(Math.abs(o[k])<0.005)delete o[k];});return o;}
+function porDep(m2){return agrupar(m2,0);}
+function porMrc(m2){return agrupar(m2,1);}
+// cantidad de una pieza en el depósito y/o marca elegidos ('' = cualquiera)
+function cantSel(m2,depSel,mrcSel){
+  const dk=depSel===SIN_DEP?'':depSel,mk=mrcSel===SIN_MRC?'':mrcSel;
+  let s=0;Object.keys(m2||{}).forEach(k=>{const [d,r]=splitK(k);if((!depSel||d===dk)&&(!mrcSel||r===mk))s+=m2[k];});
+  return r2(s);
 }
 // stock por depósito de UNA pieza (permite simular con otra lista de movimientos / otro total)
 function depDePieza(pid,movs,total){
@@ -2116,19 +2154,24 @@ function depIdx(){
   DB.piezas.forEach(p=>{ix[p.id]=cerrarDep(ix[p.id]||{},stockDe(p.id));});
   return ix;
 }
-function cantEnDep(m,sel){return r2((m||{})[sel===SIN_DEP?'':sel]||0);}
-function desgloseDep(m,unidad){ // "GALPON: 3 · TALLER: 2" (solo si hay algún depósito con nombre)
-  const ks=Object.keys(m||{});
+function cantEnDep(m,sel){return cantSel(m,sel,'');}
+function desgloseDe(o,unidad,nombre){ // "GALPON: 3 · TALLER: 2" (solo si hay alguno con nombre)
+  const ks=Object.keys(o||{});
   if(!ks.some(k=>k!==''))return '';
-  return ks.sort((a,b)=>(a===''?1:b===''?-1:a.localeCompare(b,'es'))).map(k=>nombreDep(k)+': '+fmtCant(m[k],unidad)).join(' · ');
+  return ks.sort((a,b)=>(a===''?1:b===''?-1:a.localeCompare(b,'es'))).map(k=>nombre(k)+': '+fmtCant(o[k],unidad)).join(' · ');
 }
+function desgloseDep(m2,unidad){return desgloseDe(porDep(m2),unidad,nombreDep);}
+function desgloseMrc(m2,unidad){return desgloseDe(porMrc(m2),unidad,nombreMrc);}
 // devuelve '' si la simulación es válida, o el mensaje de error
 function validarDep(pid,movsSim,totalSim,unidad){
   if(totalSim<-0.005)return 'El stock total quedaría en '+fmtCant(totalSim,unidad)+'.';
   const m=depDePieza(pid,movsSim,totalSim),hoy=depDePieza(pid);
   const k=Object.keys(m).find(k=>m[k]<-0.005);
   if(k===undefined)return '';
-  return 'En "'+nombreDep(k)+'" no alcanza: quedarían '+fmtCant(m[k],unidad)+'.\nDisponible ahí ahora: '+fmtCant(hoy[k]||0,unidad)+'.'+(desgloseDep(hoy,unidad)?'\n\nStock por depósito: '+desgloseDep(hoy,unidad):'');
+  const [d,r]=splitK(k);
+  const dd=desgloseDep(hoy,unidad),dm=desgloseMrc(hoy,unidad);
+  return 'En "'+nombreDep(d)+'"'+(marcasRepTodas().length?' con marca "'+nombreMrc(r)+'"':'')+' no alcanza: quedarían '+fmtCant(m[k],unidad)+'.\nDisponible ahí ahora: '+fmtCant(hoy[k]||0,unidad)+'.'
+    +(dd?'\n\nStock por depósito: '+dd:'')+(dm?'\nStock por marca: '+dm:'');
 }
 function opcionesDep(lista,primera,conSin){
   return `<option value="">${primera}</option>`+lista.map(d=>`<option value="${escH(d)}">${escH(d)}</option>`).join('')+(conSin?`<option value="${SIN_DEP}">Sin depósito</option>`:'');
@@ -2138,11 +2181,11 @@ function fillSelDep(sel,lista,primera,conSin){
   if(prev&&[...sel.options].some(o=>o.value===prev))sel.value=prev;
 }
 
-const sBuscar=document.getElementById('sBuscar'),sMarca=document.getElementById('sMarca'),sImpl=document.getElementById('sImpl'),sCat=document.getElementById('sCat'),sExist=document.getElementById('sExist'),sDep=document.getElementById('sDep');
+const sBuscar=document.getElementById('sBuscar'),sMarca=document.getElementById('sMarca'),sImpl=document.getElementById('sImpl'),sCat=document.getElementById('sCat'),sExist=document.getElementById('sExist'),sDep=document.getElementById('sDep'),sMrc=document.getElementById('sMrc');
 [sBuscar,sExist].forEach(e=>e.oninput=renderStock);
-sMarca.onchange=()=>{renderStock();};sImpl.onchange=()=>{renderStock();};sCat.onchange=()=>{renderStock();};sDep.onchange=()=>{renderStock();};
-// cantidad que se muestra para una pieza: la del depósito filtrado, o el total
-function cantVista(p,ix){return sDep.value?cantEnDep(ix[p.id],sDep.value):stockDe(p.id);}
+sMarca.onchange=()=>{renderStock();};sImpl.onchange=()=>{renderStock();};sCat.onchange=()=>{renderStock();};sDep.onchange=()=>{renderStock();};sMrc.onchange=()=>{renderStock();};
+// cantidad que se muestra para una pieza: la del depósito / marca filtrados, o el total
+function cantVista(p,ix){return (sDep.value||sMrc.value)?cantSel(ix[p.id],sDep.value,sMrc.value):stockDe(p.id);}
 // aplica buscar / categoría / existencia / depósito sobre una lista ya filtrada por marca e implemento
 function stockFiltrado(base,ix){
   const q=(sBuscar.value||'').toLowerCase(),c=sCat.value,ex=sExist.value,dep=sDep.value;
@@ -2152,7 +2195,7 @@ function stockFiltrado(base,ix){
     const n=cantVista(p,ix);
     if(ex==='con')return n>0;
     if(ex==='sin')return n<=0;
-    return dep?n>0:true; // con un depósito elegido se listan solo las piezas que están ahí
+    return (dep||sMrc.value)?n>0:true; // con un depósito o marca elegidos se listan solo las piezas que hay
   });
 }
 function stockEnPantalla(ix){
@@ -2163,6 +2206,7 @@ function stockEnPantalla(ix){
 function descFiltrosStock(){
   const f=[];
   if(sDep.value)f.push('Depósito: '+nombreDep(sDep.value===SIN_DEP?'':sDep.value));
+  if(sMrc.value)f.push('Marca repuesto: '+nombreMrc(sMrc.value===SIN_MRC?'':sMrc.value));
   if(sMarca.value)f.push('Marca: '+sMarca.value);
   if(sImpl.value)f.push('Implemento: '+sImpl.value);
   if(sCat.value)f.push('Categoría: '+sCat.value);
@@ -2172,11 +2216,11 @@ function descFiltrosStock(){
 }
 // PDF de stock con el mismo encabezado que los demás PDF (logo + El Mestizo + fecha)
 // dep: '' = stock total (con columna de desglose por depósito); otro valor = solo lo que hay en ese depósito
-function pdfStock(lista,subtitulo,nombre,dep){
+function pdfStock(lista,subtitulo,nombre,dep,mrc){
   if(!lista.length){alert('No hay piezas para incluir en el PDF.');return;}
   const ix=depIdx();
-  const cant=p=>dep?cantEnDep(ix[p.id],dep):stockDe(p.id);
-  const hayDeps=depositosTodos().length>0;
+  const cant=p=>(dep||mrc)?cantSel(ix[p.id],dep,mrc):stockDe(p.id);
+  const hayDeps=depositosTodos().length>0||marcasRepTodas().length>0;
   const { jsPDF }=window.jspdf;
   const doc=new jsPDF();
   if(LOGO_URI){try{doc.addImage(LOGO_URI,'PNG',170,10,26,26);}catch(e){}}
@@ -2189,11 +2233,12 @@ function pdfStock(lista,subtitulo,nombre,dep){
   const unidades=lista.filter(p=>!p.unidad).reduce((s,p)=>s+cant(p),0);
   doc.text('Piezas: '+lista.length+'  ·  Unidades (piezas): '+unidades,14,y);y+=6;
   const orden=[...lista].sort((a,b)=>(a.marca||'').localeCompare(b.marca||'','es')||(a.impl||'').localeCompare(b.impl||'','es')||(a.desc||'').localeCompare(b.desc||'','es'));
-  const conDesglose=!dep&&hayDeps;
+  const conDesglose=!dep&&!mrc&&hayDeps;
+  const detalle=p=>[desgloseDep(ix[p.id],p.unidad),desgloseMrc(ix[p.id],p.unidad)].filter(Boolean).join('\n')||(stockDe(p.id)>0?'Sin depósito':'');
   doc.autoTable({
     startY:y+2,
-    head:[['Marca','Implemento','Pieza','Cód. original','Cód. alternativo',dep?'Stock en depósito':'Stock',...(conDesglose?['Depósitos']:[])]],
-    body:orden.map(p=>[p.marca||'',p.impl||'',p.desc||'',p.codO||'',p.codA||'',fmtCant(cant(p),p.unidad),...(conDesglose?[desgloseDep(ix[p.id],p.unidad)||(stockDe(p.id)>0?'Sin depósito':'')]:[])]),
+    head:[['Marca','Implemento','Pieza','Cód. original','Cód. alternativo',(dep||mrc)?'Stock filtrado':'Stock',...(conDesglose?['Depósitos / marcas']:[])]],
+    body:orden.map(p=>[p.marca||'',p.impl||'',p.desc||'',p.codO||'',p.codA||'',fmtCant(cant(p),p.unidad),...(conDesglose?[detalle(p)]:[])]),
     styles:{fontSize:conDesglose?8:9,cellPadding:2.5},
     headStyles:{fillColor:[46,125,50],textColor:255},
     alternateRowStyles:{fillColor:[245,247,244]},
@@ -2202,10 +2247,10 @@ function pdfStock(lista,subtitulo,nombre,dep){
   });
   doc.save(nombre+'-'+hoyISO()+'.pdf');
 }
-document.getElementById('btnPdfStockTodo').onclick=()=>pdfStock(DB.piezas,'Stock completo','stock-completo','');
+document.getElementById('btnPdfStockTodo').onclick=()=>pdfStock(DB.piezas,'Stock completo','stock-completo','','');
 document.getElementById('btnPdfStockFiltro').onclick=()=>{
   const d=descFiltrosStock();
-  pdfStock(stockEnPantalla(),d?('Filtro: '+d):'Sin filtros (todo el stock)','stock-filtrado',sDep.value);
+  pdfStock(stockEnPantalla(),d?('Filtro: '+d):'Sin filtros (todo el stock)','stock-filtrado',sDep.value,sMrc.value);
 };
 function renderStock(){
   const tb=document.querySelector('#tblStock tbody');if(!tb)return;
@@ -2217,29 +2262,35 @@ function renderStock(){
   const i=sImpl.value;const pmi=i?pm.filter(p=>p.impl===i):pm;
   fillSelect(sCat,uniq(pmi.map(p=>p.cat)),'Todas las categorías');
   const deps=depositosTodos();
-  const haySin=deps.length>0&&DB.piezas.some(p=>((ix[p.id]||{})['']||0)>0);
+  const haySin=deps.length>0&&DB.piezas.some(p=>(porDep(ix[p.id])['']||0)>0);
   fillSelDep(sDep,deps,'Todos los depósitos',haySin);
-  refreshDlDep();
+  const mrcs=marcasRepTodas();
+  const haySinM=mrcs.length>0&&DB.piezas.some(p=>(porMrc(ix[p.id])['']||0)>0);
+  const prevM=sMrc.value;
+  setOpts(sMrc,'<option value="">Todas las marcas</option>'+mrcs.map(d=>`<option value="${escH(d)}">${escH(d)}</option>`).join('')+(haySinM?`<option value="${SIN_MRC}">Sin marca</option>`:''));
+  if(prevM&&[...sMrc.options].some(o=>o.value===prevM))sMrc.value=prevM;
+  refreshDlDep();refreshDlMrc();
   const dep=sDep.value;
   const lista=stockFiltrado(pmi,ix);
   const conStock=DB.piezas.filter(p=>cantVista(p,ix)>0).length,unidades=DB.piezas.filter(p=>!p.unidad).reduce((s,p)=>s+cantVista(p,ix),0);
-  const enDep=dep?' en '+nombreDep(dep===SIN_DEP?'':dep):'';
+  const enDep=(dep?' en '+nombreDep(dep===SIN_DEP?'':dep):'')+(sMrc.value?' · '+nombreMrc(sMrc.value===SIN_MRC?'':sMrc.value):'');
   document.getElementById('stockStats').innerHTML=`
     <div class="stat"><div class="n">${DB.piezas.length}</div><div class="l">Piezas en catálogo</div></div>
     <div class="stat"><div class="n">${conStock}</div><div class="l">Con existencia${escH(enDep)}</div></div>
     <div class="stat"><div class="n">${unidades}</div><div class="l">Unidades (piezas)${escH(enDep)}</div></div>`;
-  document.getElementById('stockThCant').textContent=dep?'Stock'+enDep:'Stock';
-  if(!lista.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">${dep?'No hay piezas en ese depósito con esos filtros.':'No hay piezas que coincidan.'}</div></td></tr>`;return}
+  document.getElementById('stockThCant').textContent=enDep?'Stock'+enDep:'Stock';
+  if(!lista.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty">${(dep||sMrc.value)?'No hay piezas en ese depósito con esos filtros.':'No hay piezas que coincidan.'}</div></td></tr>`;return}
   tb.innerHTML=lista.map(p=>{
     const st=stockDe(p.id),n=cantVista(p,ix);const um=ultimoMov(p.id);
-    const des=desgloseDep(ix[p.id],p.unidad);
-    const sub=dep?(r2(st)!==n?`total: ${fmtCant(st,p.unidad)}`:''):des;
+    const filtra=dep||sMrc.value;
+    const des=[desgloseDep(ix[p.id],p.unidad),desgloseMrc(ix[p.id],p.unidad)].filter(Boolean).map(escH).join('<br>');
+    const sub=filtra?(r2(st)!==n?`total: ${fmtCant(st,p.unidad)}`:''):des;
     return `<tr>
       <td><span class="pill">${p.marca||'-'}</span></td>
       <td>${p.impl||''}</td>
       <td><b>${p.desc}</b>${p.cat?`<br><span class="pill cat" style="font-size:10px">${p.cat}</span>`:''}</td>
       <td class="mono" style="font-size:12px">${p.codO||'—'}${p.codA?`<br><span style="color:var(--muted)">${p.codA}</span>`:''}</td>
-      <td class="right price" style="font-size:18px;color:${n>0?'var(--green-bright)':'var(--muted)'}">${fmtCant(n,p.unidad)}${sub?`<br><span style="font-size:10px;color:var(--muted);font-weight:400">${escH(sub)}</span>`:''}${p.unidad&&p.envase?`<br><span style="font-size:10px;color:var(--muted);font-weight:400">envase ${fmtCant(p.envase,p.unidad)}</span>`:''}</td>
+      <td class="right price" style="font-size:18px;color:${n>0?'var(--green-bright)':'var(--muted)'}">${fmtCant(n,p.unidad)}${sub?`<br><span style="font-size:10px;color:var(--muted);font-weight:400">${sub}</span>`:''}${p.unidad&&p.envase?`<br><span style="font-size:10px;color:var(--muted);font-weight:400">envase ${fmtCant(p.envase,p.unidad)}</span>`:''}</td>
       <td style="font-size:12px;color:var(--muted)">${um?(um.tipo==='E'?'+':um.tipo==='S'?'−':'⇄ ')+fmtCant(um.cant,p.unidad)+' · '+fmtFechaISO(um.fecha):'—'}</td>
       <td class="right" style="white-space:nowrap">
         <button class="btn sm" onclick="abrirMov('${p.id}','E')" title="Cargar entrada">+ Entrada</button>
@@ -2252,9 +2303,20 @@ function renderStock(){
 const modalMov=document.getElementById('modalMov');
 let movEditId=null,movPiezaId=null;
 function infoPiezaMov(pid,p){
-  const des=desgloseDep(depDePieza(pid),p&&p.unidad);
-  return (p?p.desc:'(pieza eliminada)')+' · stock actual: '+fmtCant(stockDe(pid),p&&p.unidad)+(des?'  ('+des+')':'');
+  const m=depDePieza(pid),u=p&&p.unidad;
+  const des=[desgloseDep(m,u),desgloseMrc(m,u)].filter(Boolean).join(' | ');
+  return (p?p.desc:'(pieza eliminada)')+' · stock actual: '+fmtCant(stockDe(pid),u)+(des?'  ('+des+')':'');
 }
+// muestra cuánto hay en el depósito + marca elegidos (salidas y cambios de depósito)
+function ajustarDispMov(){
+  const el=document.getElementById('mv-disp');if(!el||!movPiezaId)return;
+  const t=document.getElementById('mv-tipo').value;
+  if(t==='E'){el.textContent='';return;}
+  const p=DB.piezas.find(x=>x.id===movPiezaId);const m=depDePieza(movPiezaId);
+  const d=normDep(document.getElementById('mv-dep').value),r=normMrc(document.getElementById('mv-mrc').value);
+  el.textContent='Disponible en '+nombreDep(d)+' · '+nombreMrc(r)+': '+fmtCant(m[kDM(d,r)]||0,p&&p.unidad);
+}
+['mv-dep','mv-mrc'].forEach(id=>document.getElementById(id).addEventListener('input',ajustarDispMov));
 function ajustarUnidadMov(){
   const u=document.getElementById('mv-unid').value,t=document.getElementById('mv-tipo').value;
   document.getElementById('mv-cant-label').textContent='Cantidad'+(u?' ('+nombreUnidad(u)+' en total)':'');
@@ -2273,15 +2335,21 @@ function ajustarModalMov(){
   document.getElementById('mv-dep2-wrap').style.display=t==='T'?'':'none';
   document.getElementById('mv-impl-wrap').style.display=t==='T'?'none':'';
 }
-// depósito sugerido para sacar/mover: el único que tiene la pieza, o el que más tiene
-function depConStock(pid){
+// depósito + marca sugeridos para sacar/mover: el único que tiene la pieza, o el que más tiene
+function depMrcConStock(pid){
   const m=depDePieza(pid);const ks=Object.keys(m).filter(k=>m[k]>0);
-  if(!ks.length)return '';
-  return ks.sort((a,b)=>m[b]-m[a])[0];
+  if(!ks.length)return ['',''];
+  return splitK(ks.sort((a,b)=>m[b]-m[a])[0]);
+}
+function depConStock(pid){return depMrcConStock(pid)[0];}
+function sugerirDepMrc(pid,tipo){
+  if(tipo==='E'){document.getElementById('mv-dep').value=ultimoDep();document.getElementById('mv-mrc').value=ultimaMrc(pid);}
+  else{const [d,r]=depMrcConStock(pid);document.getElementById('mv-dep').value=d;document.getElementById('mv-mrc').value=r;}
 }
 document.getElementById('mv-tipo').onchange=()=>{
   ajustarModalMov();ajustarUnidadMov();
-  if(!movEditId&&movPiezaId){const t=document.getElementById('mv-tipo').value;document.getElementById('mv-dep').value=t==='E'?ultimoDep():depConStock(movPiezaId);}
+  if(!movEditId&&movPiezaId)sugerirDepMrc(movPiezaId,document.getElementById('mv-tipo').value);
+  ajustarDispMov();
 };
 function abrirMov(pid,tipo){
   const p=DB.piezas.find(x=>x.id===pid);if(!p)return;
@@ -2293,12 +2361,12 @@ function abrirMov(pid,tipo){
   document.getElementById('mv-cant').value=1;
   document.getElementById('mv-fecha').value=hoyISO();
   document.getElementById('mv-impl').value=tipo==='S'?(p.impl||''):'';
-  document.getElementById('mv-dep').value=tipo==='E'?ultimoDep():depConStock(pid);
+  sugerirDepMrc(pid,tipo);
   document.getElementById('mv-dep2').value='';
   document.getElementById('mv-env').value='';
   document.getElementById('mv-nota').value='';
-  refreshDlImplStock();refreshDlDep();ajustarModalMov();
-  document.getElementById('mv-unid').value=(p&&p.unidad)||'';ajustarUnidadMov();
+  refreshDlImplStock();refreshDlDep();refreshDlMrc();ajustarModalMov();
+  document.getElementById('mv-unid').value=(p&&p.unidad)||'';ajustarUnidadMov();ajustarDispMov();
   modalMov.classList.add('open');
 }
 function editarMov(id){
@@ -2313,11 +2381,12 @@ function editarMov(id){
   document.getElementById('mv-fecha').value=mv.fecha||hoyISO();
   document.getElementById('mv-impl').value=mv.impl||'';
   document.getElementById('mv-dep').value=mv.dep||'';
+  document.getElementById('mv-mrc').value=mv.mrc||'';
   document.getElementById('mv-dep2').value=mv.dep2||'';
   document.getElementById('mv-env').value=mv.envases||'';
   document.getElementById('mv-nota').value=mv.nota||'';
-  refreshDlImplStock();refreshDlDep();ajustarModalMov();
-  document.getElementById('mv-unid').value=(p&&p.unidad)||'';ajustarUnidadMov();
+  refreshDlImplStock();refreshDlDep();refreshDlMrc();ajustarModalMov();
+  document.getElementById('mv-unid').value=(p&&p.unidad)||'';ajustarUnidadMov();ajustarDispMov();
   modalMov.classList.add('open');
 }
 function cerrarModalMov(){modalMov.classList.remove('open');movEditId=null;movPiezaId=null;}
@@ -2333,12 +2402,14 @@ document.getElementById('mv-guardar').onclick=()=>{
   const fecha=document.getElementById('mv-fecha').value||hoyISO();
   const dep=normDep(document.getElementById('mv-dep').value);
   const dep2=tipo==='T'?normDep(document.getElementById('mv-dep2').value):'';
+  const mrc=normMrc(document.getElementById('mv-mrc').value);
   if(tipo==='T'&&dep===dep2){alert('El depósito de origen y el de destino son el mismo. Elegí otro destino.');return;}
   const ant=movEditId?DB.movs.find(x=>x.id===movEditId):null;
   const nuevo=Object.assign({},ant||{id:uid(),piezaId:pid},{tipo,cant,fecha,dep,
     impl:tipo==='T'?'':document.getElementById('mv-impl').value.trim(),
     nota:document.getElementById('mv-nota').value.trim()});
   if(tipo==='T')nuevo.dep2=dep2;else delete nuevo.dep2;
+  if(mrc)nuevo.mrc=mrc;else delete nuevo.mrc;
   const envases=(unidad&&tipo==='E')?Math.floor(Number(document.getElementById('mv-env').value)||0):0;
   if(envases>0)nuevo.envases=envases;else delete nuevo.envases;
   const movsSim=DB.movs.filter(x=>x.id!==nuevo.id).concat([nuevo]);
@@ -2348,7 +2419,7 @@ document.getElementById('mv-guardar').onclick=()=>{
   DB.stock[pid]=totalSim;
   if(pz){pz.unidad=unidad;if(envases>0)pz.envase=r2(cant/envases);} // la pieza recuerda el contenido por envase
   if(ant)DB.movs[DB.movs.indexOf(ant)]=nuevo;else DB.movs.unshift(nuevo);
-  recordarDep(dep);recordarDep(dep2);
+  recordarDep(dep);recordarDep(dep2);recordarMrc(mrc);
   DB.save();cerrarModalMov();renderStock();renderMovs();
 };
 function borrarMov(id){
@@ -2367,39 +2438,41 @@ function borrarMov(id){
 
 // ----- cambio de depósito de varias piezas (o todas) -----
 const modalTras=document.getElementById('modalTras');
-let trasSel=new Map(); // piezaId -> cantidad a mover (las tildadas)
+let trasSel=new Map(); // "piezaId␁marca" -> cantidad a mover (las tildadas)
 const trOrigen=document.getElementById('tr-origen'),trDestino=document.getElementById('tr-destino'),trBuscar=document.getElementById('tr-buscar');
 function trOrigenKey(){return trOrigen.value===SIN_DEP?'':trOrigen.value;}
+// una fila por pieza + marca del repuesto que haya en el depósito de origen
 function piezasEnOrigen(){
-  const ix=depIdx(),k=trOrigenKey();
-  return DB.piezas.map(p=>({p,disp:r2((ix[p.id]||{})[k]||0)})).filter(x=>x.disp>0)
-    .sort((a,b)=>(a.p.marca||'').localeCompare(b.p.marca||'','es')||(a.p.desc||'').localeCompare(b.p.desc||'','es'));
+  const ix=depIdx(),dk=trOrigenKey(),out=[];
+  DB.piezas.forEach(p=>{const m=ix[p.id]||{};Object.keys(m).forEach(k=>{const [d,r]=splitK(k);if(d===dk&&m[k]>0)out.push({p,mrc:r,k:p.id+KS+r,disp:r2(m[k])});});});
+  return out.sort((a,b)=>(a.p.marca||'').localeCompare(b.p.marca||'','es')||(a.p.desc||'').localeCompare(b.p.desc||'','es')||a.mrc.localeCompare(b.mrc,'es'));
 }
 function trVisibles(){
   const q=(trBuscar.value||'').toLowerCase();
-  return piezasEnOrigen().filter(x=>!q||[x.p.desc,x.p.codO,x.p.codA,x.p.marca,x.p.impl,x.p.cat].join(' ').toLowerCase().includes(q));
+  return piezasEnOrigen().filter(x=>!q||[x.p.desc,x.p.codO,x.p.codA,x.p.marca,x.p.impl,x.p.cat,x.mrc].join(' ').toLowerCase().includes(q));
 }
 function renderTraslado(){
   const tb=document.querySelector('#tblTras tbody');
   const todas=piezasEnOrigen(),vis=trVisibles();
   // quitar de la selección lo que ya no está en el origen
-  const ids=new Set(todas.map(x=>x.p.id));[...trasSel.keys()].forEach(id=>{if(!ids.has(id))trasSel.delete(id);});
+  const ids=new Set(todas.map(x=>x.k));[...trasSel.keys()].forEach(id=>{if(!ids.has(id))trasSel.delete(id);});
   document.getElementById('tr-resumen').textContent=trasSel.size+' de '+todas.length+' pieza(s) tildada(s)';
   if(!vis.length){tb.innerHTML=`<tr><td colspan="4"><div class="empty">${todas.length?'Ninguna pieza coincide con la búsqueda.':'No hay piezas con stock en ese depósito.'}</div></td></tr>`;return}
-  tb.innerHTML=vis.map(({p,disp})=>{
-    const on=trasSel.has(p.id);
-    return `<tr data-id="${p.id}" data-disp="${disp}">
+  const conMrc=marcasRepTodas().length>0;
+  tb.innerHTML=vis.map(({p,mrc,k,disp})=>{
+    const on=trasSel.has(k);
+    return `<tr data-id="${escH(k)}" data-disp="${disp}">
       <td><input type="checkbox" class="tr-chk" ${on?'checked':''} style="width:17px;height:17px;accent-color:var(--green);cursor:pointer"></td>
-      <td><b>${p.desc}</b><br><span style="color:var(--muted);font-size:11px">${[p.marca,p.impl].filter(Boolean).join(' · ')}</span></td>
+      <td><b>${p.desc}</b>${conMrc?` <span class="pill" style="font-size:10px">${escH(nombreMrc(mrc))}</span>`:''}<br><span style="color:var(--muted);font-size:11px">${[p.marca,p.impl].filter(Boolean).join(' · ')}</span></td>
       <td class="right mono">${fmtCant(disp,p.unidad)}</td>
-      <td class="right"><input class="qty tr-cant" type="number" min="0" max="${disp}" step="${p.unidad?'any':'1'}" value="${on?trasSel.get(p.id):disp}" style="width:100px"></td>
+      <td class="right"><input class="qty tr-cant" type="number" min="0" max="${disp}" step="${p.unidad?'any':'1'}" value="${on?trasSel.get(k):disp}" style="width:100px"></td>
     </tr>`;
   }).join('');
 }
 function abrirTraslado(){
   const ix=depIdx(),deps=depositosTodos();
-  const conStock=deps.filter(d=>DB.piezas.some(p=>((ix[p.id]||{})[d]||0)>0));
-  const haySin=DB.piezas.some(p=>((ix[p.id]||{})['']||0)>0);
+  const conStock=deps.filter(d=>DB.piezas.some(p=>(porDep(ix[p.id])[d]||0)>0));
+  const haySin=DB.piezas.some(p=>(porDep(ix[p.id])['']||0)>0);
   if(!conStock.length&&!haySin){alert('No hay piezas con stock para mover.');return;}
   trOrigen.innerHTML=conStock.map(d=>`<option value="${escH(d)}">${escH(d)}</option>`).join('')+(haySin?`<option value="${SIN_DEP}">Sin depósito</option>`:'');
   if(sDep.value&&[...trOrigen.options].some(o=>o.value===sDep.value))trOrigen.value=sDep.value;
@@ -2411,7 +2484,7 @@ function abrirTraslado(){
 function cerrarTraslado(){modalTras.classList.remove('open');trasSel=new Map();}
 trOrigen.onchange=()=>{trasSel=new Map();renderTraslado();};
 trBuscar.oninput=renderTraslado;
-document.getElementById('tr-todas').onclick=()=>{trVisibles().forEach(({p,disp})=>trasSel.set(p.id,disp));renderTraslado();};
+document.getElementById('tr-todas').onclick=()=>{trVisibles().forEach(({k,disp})=>trasSel.set(k,disp));renderTraslado();};
 document.getElementById('tr-ninguna').onclick=()=>{trasSel=new Map();renderTraslado();};
 document.getElementById('tr-cancelar').onclick=cerrarTraslado;
 document.querySelector('#tblTras tbody').addEventListener('input',e=>{
@@ -2425,19 +2498,19 @@ document.getElementById('tr-guardar').onclick=()=>{
   const origen=trOrigenKey(),destino=normDep(trDestino.value);
   if(origen===destino){alert(destino?'El origen y el destino son el mismo depósito.':'Escribí el depósito de destino.');return;}
   if(!trasSel.size){alert('Tildá al menos una pieza (o usá "Tildar todas").');return;}
-  const disp=new Map(piezasEnOrigen().map(x=>[x.p.id,x]));
+  const disp=new Map(piezasEnOrigen().map(x=>[x.k,x]));
   const aMover=[];
   for(const [id,q] of trasSel){
     const x=disp.get(id);if(!x)continue;
     let c=Number(q)||0;if(!x.p.unidad)c=Math.floor(c);c=r2(c);
     if(c<=0){alert('La cantidad de "'+x.p.desc+'" tiene que ser mayor a 0.');return;}
-    if(c>x.disp+0.005){alert('"'+x.p.desc+'": querés mover '+fmtCant(c,x.p.unidad)+' pero en '+nombreDep(origen)+' hay '+fmtCant(x.disp,x.p.unidad)+'.');return;}
-    aMover.push({p:x.p,c});
+    if(c>x.disp+0.005){alert('"'+x.p.desc+'"'+(x.mrc?' ('+x.mrc+')':'')+': querés mover '+fmtCant(c,x.p.unidad)+' pero en '+nombreDep(origen)+' hay '+fmtCant(x.disp,x.p.unidad)+'.');return;}
+    aMover.push({p:x.p,c,mrc:x.mrc});
   }
   if(!aMover.length)return;
   if(!confirm('¿Mover '+aMover.length+' pieza(s) de "'+nombreDep(origen)+'" a "'+nombreDep(destino)+'"?'))return;
   const fecha=document.getElementById('tr-fecha').value||hoyISO(),nota=document.getElementById('tr-nota').value.trim();
-  aMover.forEach(({p,c})=>DB.movs.unshift({id:uid(),piezaId:p.id,tipo:'T',cant:c,fecha,impl:'',nota,dep:origen,dep2:destino}));
+  aMover.forEach(({p,c,mrc})=>{const mv={id:uid(),piezaId:p.id,tipo:'T',cant:c,fecha,impl:'',nota,dep:origen,dep2:destino};if(mrc)mv.mrc=mrc;DB.movs.unshift(mv);});
   recordarDep(destino);
   DB.save();cerrarTraslado();renderStock();renderMovs();
   alert('✅ Se movieron '+aMover.length+' pieza(s) de "'+nombreDep(origen)+'" a "'+nombreDep(destino)+'".');
@@ -2456,7 +2529,7 @@ function movsFiltrados(){
     if(mHasta.value&&(mv.fecha||'')>mHasta.value)return false;
     if(mTipo.value&&mv.tipo!==mTipo.value)return false;
     if(dep&&!((mv.dep||'')===depK||(mv.tipo==='T'&&(mv.dep2||'')===depK)))return false;
-    if(q){const p=DB.piezas.find(x=>x.id===mv.piezaId);const txt=[(p?p.desc:''),(p?p.codO:''),(p?p.codA:''),mv.impl,mv.nota,mv.dep,mv.dep2].join(' ').toLowerCase();if(!txt.includes(q))return false;}
+    if(q){const p=DB.piezas.find(x=>x.id===mv.piezaId);const txt=[(p?p.desc:''),(p?p.codO:''),(p?p.codA:''),mv.impl,mv.nota,mv.dep,mv.dep2,mv.mrc].join(' ').toLowerCase();if(!txt.includes(q))return false;}
     return true;
   }).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
 }
@@ -2465,7 +2538,7 @@ function renderMovs(){
   const tb=document.querySelector('#tblMov tbody');if(!tb)return;
   fillSelDep(mDep,depositosTodos(),'Todos los depósitos',depositosTodos().length>0);
   const lista=movsFiltrados();
-  if(!lista.length){tb.innerHTML=`<tr><td colspan="8"><div class="empty">Sin movimientos para ese filtro.</div></td></tr>`;return}
+  if(!lista.length){tb.innerHTML=`<tr><td colspan="9"><div class="empty">Sin movimientos para ese filtro.</div></td></tr>`;return}
   const est={E:['ENTRADA','background:#15331f;color:#6fd38a','var(--green-bright)','+'],S:['SALIDA','background:#33270f;color:var(--amber)','var(--amber)','−'],T:['TRASLADO','background:#1c2733;color:#8fc1f0','var(--text)','⇄ ']};
   tb.innerHTML=lista.map(mv=>{
     const p=DB.piezas.find(x=>x.id===mv.piezaId);
@@ -2475,6 +2548,7 @@ function renderMovs(){
       <td><span class="flag" style="${e[1]}">${e[0]}</span></td>
       <td>${p?`<b>${p.desc}</b>${p.impl?`<br><span style="color:var(--muted);font-size:11px">${p.impl}</span>`:''}`:'<span style="color:var(--muted)">(pieza eliminada)</span>'}</td>
       <td class="right price" style="color:${e[2]}">${e[3]}${fmtCant(mv.cant,p&&p.unidad)}</td>
+      <td style="font-size:12px">${mv.mrc?`<span class="pill" style="font-size:10px">${escH(mv.mrc)}</span>`:'—'}</td>
       <td style="font-size:12px">${escH(depMovTxt(mv))||'—'}</td>
       <td>${mv.impl||'—'}</td>
       <td style="font-size:12px;color:var(--muted)">${[mv.nota,notaEnvases(mv,p&&p.unidad)].filter(Boolean).join(' · ')}</td>
@@ -2488,8 +2562,8 @@ document.getElementById('btnMovCsv').onclick=()=>{
   const lista=movsFiltrados();
   if(!lista.length){alert('No hay movimientos para exportar.');return;}
   const esc=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-  const filas=[['fecha','tipo','pieza','marca','implemento_pieza','cod_original','cod_alternativo','cantidad','unidad','deposito','deposito_destino','implemento_destino','nota']];
-  lista.forEach(mv=>{const p=DB.piezas.find(x=>x.id===mv.piezaId)||{};filas.push([fmtFechaISO(mv.fecha),mv.tipo==='E'?'ENTRADA':mv.tipo==='S'?'SALIDA':'TRASLADO',p.desc||'',p.marca||'',p.impl||'',p.codO||'',p.codA||'',mv.cant,abrevUnidad(p.unidad),mv.dep||'',mv.tipo==='T'?(mv.dep2||''):'',mv.impl||'',[mv.nota,notaEnvases(mv,p.unidad)].filter(Boolean).join(' · ')]);});
+  const filas=[['fecha','tipo','pieza','marca','implemento_pieza','cod_original','cod_alternativo','marca_repuesto','cantidad','unidad','deposito','deposito_destino','implemento_destino','nota']];
+  lista.forEach(mv=>{const p=DB.piezas.find(x=>x.id===mv.piezaId)||{};filas.push([fmtFechaISO(mv.fecha),mv.tipo==='E'?'ENTRADA':mv.tipo==='S'?'SALIDA':'TRASLADO',p.desc||'',p.marca||'',p.impl||'',p.codO||'',p.codA||'',mv.mrc||'',mv.cant,abrevUnidad(p.unidad),mv.dep||'',mv.tipo==='T'?(mv.dep2||''):'',mv.impl||'',[mv.nota,notaEnvases(mv,p.unidad)].filter(Boolean).join(' · ')]);});
   const csv='﻿'+filas.map(r=>r.map(esc).join(';')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='movimientos-stock-'+hoyISO()+'.csv';a.click();
 };
@@ -2716,6 +2790,7 @@ function normalizar(){
   if(!DB.stock||typeof DB.stock!=='object')DB.stock={};
   if(!Array.isArray(DB.movs))DB.movs=[];
   if(!Array.isArray(DB.depositos))DB.depositos=[];
+  if(!Array.isArray(DB.marcasRep))DB.marcasRep=[];
   if(!Array.isArray(DB.implementos))DB.implementos=[];
   if(!Array.isArray(DB.servicios))DB.servicios=[];
   DB.implementos.forEach(i=>{if(typeof i.activo!=='boolean')i.activo=true;if(typeof i.menor!=='boolean')i.menor=false;});
@@ -2779,7 +2854,7 @@ function aplicarDatosNube(d){
     nrosReservados:(d.nrosReservados&&typeof d.nrosReservados==='object')?d.nrosReservados:{},
     stock:(d.stock&&typeof d.stock==='object')?d.stock:{}, movs:Array.isArray(d.movs)?d.movs:[],
     implementos:Array.isArray(d.implementos)?d.implementos:[], servicios:Array.isArray(d.servicios)?d.servicios:[],
-    depositos:Array.isArray(d.depositos)?d.depositos:[]
+    depositos:Array.isArray(d.depositos)?d.depositos:[], marcasRep:Array.isArray(d.marcasRep)?d.marcasRep:[]
   });
   DB._rev=Math.max(Number(DB._rev)||0,Number(d.rev)||0); // ahora conozco esta versión
   normalizar(); // saneo en memoria; se persiste con el próximo guardado del usuario (nunca desde acá)
