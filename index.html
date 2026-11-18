@@ -693,7 +693,7 @@ const fbDb = getDatabase(fbApp);
 // Toda la app de repuestos vive bajo la rama "repuestos" (no toca proveedores)
 const RAIZ = 'repuestos';
 // ===== VERSIÓN DE LA APP: se actualiza en cada entrega. Se muestra arriba, junto al estado de conexión. =====
-const APP_VERSION='v2026.11.17-2';
+const APP_VERSION='v2026.11.17-3';
 (function(){const hd=document.querySelector('.topbar>header');if(!hd)return;const f=()=>document.documentElement.style.setProperty('--alto-header',hd.offsetHeight+'px');f();window.addEventListener('resize',f);if(window.ResizeObserver)new ResizeObserver(f).observe(hd);})();
 document.getElementById('appVersion').textContent=APP_VERSION;
 document.title=document.title+' · '+APP_VERSION;
@@ -2419,10 +2419,27 @@ document.getElementById('mv-guardar').onclick=()=>{
   if(mrc)nuevo.mrc=mrc;else delete nuevo.mrc;
   const envases=(unidad&&tipo==='E')?Math.floor(Number(document.getElementById('mv-env').value)||0):0;
   if(envases>0)nuevo.envases=envases;else delete nuevo.envases;
-  const movsSim=DB.movs.filter(x=>x.id!==nuevo.id).concat([nuevo]);
+  let movsSim=DB.movs.filter(x=>x.id!==nuevo.id).concat([nuevo]);
   const totalSim=r2(stockDe(pid)-(ant?efectoMov(ant):0)+efectoMov(nuevo));
-  const err=validarDep(pid,movsSim,totalSim,unidad);
+  let err=validarDep(pid,movsSim,totalSim,unidad);
+  // Al cambiarle la marca a un movimiento ya cargado, los otros movimientos de esa pieza que tenían
+  // la marca anterior (ej: la salida de una entrada "sin marca") quedarían sin stock de dónde salir.
+  // Se ofrece ponerles la misma marca a todos juntos.
+  let otros=[];
+  if(err&&ant&&(ant.mrc||'')!==mrc){
+    const vieja=ant.mrc||'';
+    const cand=DB.movs.filter(x=>x.id!==nuevo.id&&x.piezaId===pid&&(x.mrc||'')===vieja);
+    if(cand.length){
+      const ids=new Set(cand.map(x=>x.id));
+      const sim2=DB.movs.filter(x=>x.id!==nuevo.id).map(x=>{if(!ids.has(x.id))return x;const c=Object.assign({},x);if(mrc)c.mrc=mrc;else delete c.mrc;return c;}).concat([nuevo]);
+      if(!validarDep(pid,sim2,totalSim,unidad)){
+        if(!confirm('Esta pieza tiene '+cand.length+' movimiento(s) más cargados como "'+nombreMrc(vieja)+'" (entradas o salidas relacionadas).\n\n¿Les pongo también la marca "'+nombreMrc(mrc)+'" a todos?\n\nAceptar = cambiar la marca en todos\nCancelar = no cambiar nada'))return;
+        otros=cand;movsSim=sim2;err='';
+      }
+    }
+  }
   if(err){alert('No se puede guardar.\n\n'+err);return;}
+  otros.forEach(x=>{if(mrc)x.mrc=mrc;else delete x.mrc;});
   DB.stock[pid]=totalSim;
   if(pz){pz.unidad=unidad;if(envases>0)pz.envase=r2(cant/envases);} // la pieza recuerda el contenido por envase
   if(ant)DB.movs[DB.movs.indexOf(ant)]=nuevo;else DB.movs.unshift(nuevo);
